@@ -12,7 +12,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from okm.agent import agent_answer
 from okm.ask import brief_for_ui, export_payload
-from okm.humanize import is_noise_service
+from okm.config import load_config
+from okm.humanize import is_noise_service, product_name
 from okm.layout3d import build_scene_graph, build_system_graph
 from okm.store import ExpedienteStore
 
@@ -33,13 +34,17 @@ class BriefingApp:
         try:
             run = store.latest_run() or {}
             services = store.list_services()
+            ui = load_config().get("ui", {}) or {}
+            scopes = ui.get("scopes") or [{"id": "pais", "label": "País", "options": []}]
             return {
+                "product_name": product_name(),
                 "workspace": str(self.workspace),
                 "source_uri": run.get("source_uri"),
                 "run_id": run.get("run_id"),
                 "files_ingested": run.get("files_ingested"),
                 "claims_written": run.get("claims_written"),
                 "gaps_written": run.get("gaps_written"),
+                "scopes": scopes,
                 "services": [
                     {
                         "id": s.service_id,

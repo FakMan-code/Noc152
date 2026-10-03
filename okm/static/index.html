@@ -167,8 +167,10 @@
     }
     .bubble.user { border-color: rgba(245,78,0,0.35); background: var(--accent-dim); }
     .bubble .who { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); margin-bottom: 0.15rem; }
-    .sug { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-    .sug button { font-size: 0.72rem; padding: 0.22rem 0.45rem; color: var(--muted); border-radius: 999px; }
+    #scopeSelect:disabled {
+      opacity: 0.72;
+      cursor: not-allowed;
+    }
 
     dialog {
       border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
@@ -205,6 +207,9 @@
       </div>
       <div class="top-actions">
         <select id="serviceSelect" aria-label="Servicio"></select>
+        <select id="scopeSelect" aria-label="País" title="Alcance por país (próximamente)">
+          <option value="">País — próximamente</option>
+        </select>
         <button type="button" id="btnIntro">¿Qué es esto?</button>
         <button type="button" id="btnTrace">Traza</button>
         <button type="button" id="btnReset">Reset vista</button>
@@ -234,12 +239,6 @@
         <div class="panel-b">
           <div class="thread" id="thread"></div>
           <div class="ask-row">
-            <div class="sug">
-              <button type="button" data-q="¿Qué es este servicio?">qué es</button>
-              <button type="button" data-q="¿De qué depende?">dependencias</button>
-              <button type="button" data-q="¿Hay señales de monitoreo?">señales</button>
-              <button type="button" data-q="¿Qué gaps tiene el expediente?">huecos</button>
-            </div>
             <textarea id="question" placeholder="Preguntá en español…"></textarea>
             <button type="button" class="primary" id="askBtn">Preguntar</button>
           </div>
@@ -745,12 +744,6 @@
         return;
       }
 
-      const sug = e.target.closest("[data-q]");
-      if (sug) {
-        el("question").value = sug.getAttribute("data-q");
-        ask();
-      }
-
       const facetBtn = e.target.closest("#filters [data-facet]");
       if (facetBtn) {
         const f = facetBtn.getAttribute("data-facet");
@@ -786,12 +779,35 @@
       }
     });
 
+    function renderScopes(scopes) {
+      const sel = el("scopeSelect");
+      const list = Array.isArray(scopes) && scopes.length ? scopes : [{ id: "pais", label: "País", options: [] }];
+      // Por ahora una dimensión (País). Cuando haya options, se habilita.
+      const dim = list[0];
+      const options = dim.options || [];
+      if (!options.length) {
+        sel.innerHTML = `<option value="">${esc(dim.label || "País")} — próximamente</option>`;
+        sel.disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      sel.innerHTML =
+        `<option value="">${esc(dim.label || "País")}</option>` +
+        options.map((o) => {
+          const val = typeof o === "string" ? o : (o.id || o.code || o.name);
+          const lab = typeof o === "string" ? o : (o.label || o.name || val);
+          return `<option value="${esc(val)}">${esc(lab)}</option>`;
+        }).join("");
+    }
+
     (async function boot() {
       try {
         const meta = await api("/api/meta");
+        document.title = meta.product_name || "Noc152";
+        renderScopes(meta.scopes);
         const opts = [];
         if (meta.has_system_view) {
-          opts.push(`<option value="__system__">Sistema (todos los microservicios)</option>`);
+          opts.push(`<option value="__system__">Sistema (todos los servicios)</option>`);
         }
         for (const s of meta.services || []) {
           opts.push(`<option value="${esc(s.name)}">${esc(s.name)}</option>`);

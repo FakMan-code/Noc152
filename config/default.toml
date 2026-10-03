@@ -1,5 +1,14 @@
-# Reglas de organización — no nombres de servicios.
+# Reglas de organización — no nombres de servicios de negocio embebidos.
 # El motor es genérico: cualquier repositorio/fuente autorizada.
+
+[ui]
+product_name = "Noc152"
+
+# Dimensiones de alcance (UI). Por ahora vacías; se llenan cuando haya datos.
+[[ui.scopes]]
+id = "pais"
+label = "País"
+options = []
 
 [ingest]
 # Extensiones que se leen como texto addressable

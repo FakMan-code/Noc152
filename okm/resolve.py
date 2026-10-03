@@ -24,10 +24,17 @@ def discover_services(
     resolve_cfg = cfg.get("resolve", {})
     manifests = set(resolve_cfg.get("manifest_files", []))
     fallback = bool(resolve_cfg.get("fallback_root_service", True))
+    product_name = (cfg.get("ui", {}) or {}).get("product_name")
+    if isinstance(product_name, str):
+        product_name = product_name.strip() or None
+    else:
+        product_name = None
 
     root_name = Path(source_uri.rstrip("/").split("/")[-1]).stem or "root"
     if root_name.endswith(".git"):
         root_name = root_name[:-4]
+    # Nombre de producto para el servicio raíz (evita heredar el nombre de carpeta)
+    root_label = product_name or root_name
 
     found_dirs: dict[str, Service] = {}
 
@@ -38,11 +45,14 @@ def discover_services(
         parent = p.parent.as_posix()
         if parent == ".":
             parent = ""
-        name = _service_name_from_path(parent, root_name)
+        name = _service_name_from_path(parent, root_label)
         sid = stable_id("svc", source_uri, parent or "/", name)
         aliases = [name]
         if parent:
             aliases.append(parent)
+        elif product_name and root_name.lower() != product_name.lower():
+            # Conservar el stem del path como alias técnico, no como título
+            aliases.append(root_name)
         found_dirs[parent] = Service(
             service_id=sid,
             name=name,
@@ -52,11 +62,14 @@ def discover_services(
         )
 
     if not found_dirs and fallback:
-        sid = stable_id("svc", source_uri, "/", root_name)
+        sid = stable_id("svc", source_uri, "/", root_label)
+        aliases = [root_label]
+        if product_name and root_name.lower() != product_name.lower():
+            aliases.append(root_name)
         found_dirs[""] = Service(
             service_id=sid,
-            name=root_name,
-            aliases=[root_name],
+            name=root_label,
+            aliases=sorted(set(aliases)),
             root_path=".",
             summary=None,
         )

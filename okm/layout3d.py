@@ -272,8 +272,11 @@ def build_scene_graph(store: ExpedienteStore, service: Service) -> dict[str, Any
         "summary": f"{summary_es} {health['reason']}",
         "meta": {
             "salud": health["label"],
-            "fuente": source_uri or "local",
-            "aliases": ", ".join(service.aliases) if service.aliases else service.name,
+            "fuente": source_display_name(source_uri),
+            "aliases": ", ".join(
+                a for a in (service.aliases or []) if "proyecto" not in a.lower()
+            )
+            or service.name,
         },
         "sections": [
             {

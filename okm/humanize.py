@@ -136,15 +136,26 @@ def is_noise_service(name: str) -> bool:
     return name.lower() in noise_service_names()
 
 
+def product_name() -> str:
+    cfg = load_config()
+    name = (cfg.get("ui", {}) or {}).get("product_name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return "Noc152"
+
+
 def source_display_name(source_uri: str | None) -> str:
+    # Preferir marca de producto sobre nombre de carpeta/repo
+    prod = product_name()
     if not source_uri:
-        return "Sistema"
+        return prod
     raw = source_uri.rstrip("/").split("/")[-1]
     if raw.endswith(".git"):
         raw = raw[:-4]
-    # Windows path → last segment
     raw = PurePosixPath(raw.replace("\\", "/")).name or raw
-    return raw or "Sistema"
+    if not raw or "proyecto" in raw.lower():
+        return prod
+    return raw
 
 
 def human_summary(service: Service) -> str:

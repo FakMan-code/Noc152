@@ -1,5 +1,7 @@
 # Noc152
 
+Repo: https://github.com/FakMan-code/Noc152
+
 Expediente operacional + mapa 3D consultable.
 
 Noc152 lee un repositorio (local o git público), detecta **servicios** por manifiestos, guarda claims con evidencia abríble y los muestra en un briefing interactivo. No asume productos ni organizaciones: la fuente la elegís vos.
@@ -24,7 +26,7 @@ pip install -r requirements.txt
 ## Uso rápido
 
 ```powershell
-cd c:\Users\mglembo\Desktop\Proyecto-Noc-152
+cd <ruta-de-Noc152>
 
 # Ingestar cualquier repo (ejemplo público de microservicios)
 python -m okm.cli ingest https://github.com/GoogleCloudPlatform/microservices-demo --workspace .demo_ws
