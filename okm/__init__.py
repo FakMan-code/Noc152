@@ -1,3 +1,3 @@
-"""Operational Knowledge Motor — generic expediente for any codebase."""
+"""Noc152 — expediente operacional genérico + briefing 3D."""
 
 __version__ = "0.1.0"

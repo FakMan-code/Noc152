@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath
 from typing import Any
 
+from okm.config import load_config
 from okm.models import Claim, EpistemicKind, Facet, Service
 
 KIND_ES = {
@@ -84,15 +86,9 @@ def facet_label(facet: str) -> str:
 def human_claim(claim: Claim) -> str:
     obj = clean_markdown(claim.object_value or "")
     facet = facet_label(claim.facet.value)
+
     if claim.predicate == "likely_purpose" and obj:
-        low = obj.lower()
-        if "httpx" in low or "http client" in low:
-            text = (
-                "Sirve para que programas en Python hagan pedidos HTTP "
-                "(llamar APIs), con modo sync y async, e incluso una CLI."
-            )
-        else:
-            text = f"Según el README, su propósito sería: {obj}"
+        text = f"Según el README, su propósito sería: {obj}"
     else:
         tpl = _PRED_TEMPLATES.get(claim.predicate)
         if tpl:
@@ -105,7 +101,6 @@ def human_claim(claim: Claim) -> str:
 
     text = clean_markdown(text)
 
-    # Light touch-ups for leftover English extractor phrasing
     replacements = (
         ("Python project name:", "Se llama"),
         ("Documented title:", "Título documentado:"),
@@ -125,101 +120,71 @@ def human_claim(claim: Claim) -> str:
         reason = GAP_REASON_ES.get(claim.gap_reason, claim.gap_reason)
         text = f"{text} ({reason})"
 
-    # Soften robotic tone
     text = text.strip()
     if text and not text.endswith((".", "?", "!")):
         text += "."
     return text
 
 
-# Friendly blurbs for well-known public demos (presentation only).
-_SERVICE_BLURBS: dict[str, str] = {
-    "frontend": (
-        "La tienda que ve el usuario: la web de Online Boutique. "
-        "Habla con el resto de microservicios para mostrar productos, carrito y checkout."
-    ),
-    "productcatalogservice": (
-        "Catálogo de productos: responde qué hay en venta, precios y detalle de cada ítem."
-    ),
-    "cartservice": "Carrito de compras: guarda qué agregó el usuario antes de pagar.",
-    "checkoutservice": (
-        "Checkout: arma el pedido, coordina pago, envío y confirma la compra."
-    ),
-    "paymentservice": "Pagos: simula cobrar la compra (demo, no es un banco real).",
-    "shippingservice": "Envíos: calcula/simula el costo y la logística de entrega.",
-    "emailservice": "Emails: manda el mail de confirmación del pedido (en la demo).",
-    "currencyservice": "Monedas: convierte precios entre divisas.",
-    "recommendationservice": "Recomendaciones: sugiere otros productos según lo que mirás.",
-    "adservice": "Anuncios: muestra ads/contextuales en la tienda demo.",
-    "loadgenerator": "Generador de carga: inventa tráfico falso para probar el sistema.",
-    "shoppingassistantservice": "Asistente de compras: ayuda al usuario a elegir productos.",
-    "httpx": (
-        "HTTPX no es una app que corre sola: es una biblioteca Python (cliente HTTP) "
-        "que otros programas usan para llamar APIs."
-    ),
-    "okm": (
-        "OKM / Noc152: el motor que estás usando. Lee un repo, arma un expediente "
-        "(servicios, claims, evidencia) y lo muestra en un mapa 3D con preguntas."
-    ),
-    "proyecto-noc-152": (
-        "Este mismo proyecto: Operational Knowledge Motor + briefing Noc152."
-    ),
-}
-
-_NOISE_SERVICES = {"helm-chart", "src", "microservices-demo"}
+def noise_service_names() -> set[str]:
+    cfg = load_config()
+    names = cfg.get("resolve", {}).get("noise_service_names", [])
+    return {str(n).lower() for n in names}
 
 
 def is_noise_service(name: str) -> bool:
-    return name.lower() in _NOISE_SERVICES
+    return name.lower() in noise_service_names()
 
 
-def service_blurb(name: str) -> str | None:
-    return _SERVICE_BLURBS.get(name.lower())
+def source_display_name(source_uri: str | None) -> str:
+    if not source_uri:
+        return "Sistema"
+    raw = source_uri.rstrip("/").split("/")[-1]
+    if raw.endswith(".git"):
+        raw = raw[:-4]
+    # Windows path → last segment
+    raw = PurePosixPath(raw.replace("\\", "/")).name or raw
+    return raw or "Sistema"
 
 
 def human_summary(service: Service) -> str:
-    name = service.name.lower()
-    blurb = service_blurb(name)
-    if blurb:
-        return blurb
-
     raw = clean_markdown(service.summary or "")
     if not raw:
         return (
             f"«{service.name}» es un servicio que el motor reconoció en este repositorio "
             "(por un manifiesto tipo Dockerfile, go.mod, package.json, etc.)."
         )
-
-    if "http client" in raw.lower() or "httpx" in raw.lower():
-        return _SERVICE_BLURBS["httpx"]
-
     if len(raw) > 280:
         raw = raw[:277] + "…"
     return (
         f"Esto es lo que entendimos de «{service.name}»: {raw} "
-        "Sale del README/código del repo, no de un catálogo de producto."
+        "Sale del README/código del repo, no de un catálogo externo."
     )
 
 
 def system_intro(*, source_uri: str | None, service_names: list[str]) -> dict[str, Any]:
+    title = source_display_name(source_uri)
     names = ", ".join(service_names[:8])
     more = f" y {len(service_names) - 8} más" if len(service_names) > 8 else ""
+    multi = len(service_names) > 1
     return {
         "title": "Mapa del sistema",
         "body": (
-            f"Este repo ({source_uri or 'local'}) es la demo pública Online Boutique de Google: "
-            "una tienda online partida en microservicios. Cada nodo naranja es un servicio distinto "
-            "(frontend, carrito, pagos, envíos…). Click en uno para entrar a su expediente."
+            f"Noc152 leyó «{title}» ({source_uri or 'ruta local'}) y armó este mapa. "
+            + (
+                "Cada nodo es un servicio detectado por manifiestos; click para entrar a su expediente."
+                if multi
+                else "Por ahora hay un servicio principal; abrilo para ver áreas, hallazgos y evidencia."
+            )
         ),
         "what_is_it": (
-            "No es una sola app monolítica: es un sistema. "
-            f"Servicios en el mapa: {names}{more}."
+            f"{'Sistema con varios servicios' if multi else 'Servicio detectado'}: {names}{more}."
         ),
         "node_legend": [
             {
                 "kind": "service",
                 "label": "Violeta — hub del sistema",
-                "text": "El nodo principal del mapa (Online Boutique), no un estado de salud.",
+                "text": "Nodo principal del mapa (identidad del source), no un estado de salud.",
             },
             {
                 "kind": "facet",
@@ -238,22 +203,21 @@ def system_intro(*, source_uri: str | None, service_names: list[str]) -> dict[st
             },
         ],
         "tips": [
-            "Empezá por frontend: es la cara de la tienda.",
-            "Después mirá checkoutservice / paymentservice / cartservice.",
+            "Empezá por el hub violeta o por el servicio que te interese.",
             "Usá el selector «Sistema» para volver al mapa completo.",
+            "Preguntá en español: el agente solo usa el expediente.",
         ],
     }
 
 
 def brief_intro(service: Service, *, source_uri: str | None = None) -> dict[str, Any]:
-    """Onboarding card so the map is understandable without knowing the repo."""
     what = human_summary(service)
     src = source_uri or "repositorio local"
     return {
         "title": f"Servicio: {service.name}",
         "body": (
             f"Entraste al expediente de «{service.name}» dentro de {src}. "
-            "El centro es este microservicio; alrededor están áreas de conocimiento "
+            "El centro es este servicio; alrededor están áreas de conocimiento "
             "y hallazgos con evidencia del código."
         ),
         "what_is_it": what,
@@ -276,7 +240,7 @@ def brief_intro(service: Service, *, source_uri: str | None = None) -> dict[str,
         ],
         "tips": [
             "Click en un nodo para leer en español qué significa.",
-            "Volvé a «Sistema» en el selector para ver todos los microservicios.",
+            "Volvé a «Sistema» en el selector para ver todos los servicios.",
             "«Traza» anima el camino desde el servicio hacia afuera.",
         ],
     }

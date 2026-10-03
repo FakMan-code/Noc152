@@ -57,6 +57,8 @@ manifest_files = [
 ]
 # Si no hay manifiestos, el root del source es un servicio candidato
 fallback_root_service = true
+# Nombres de carpeta/manifiesto que no son servicios de producto
+noise_service_names = ["src", "docs", "tests", "scripts", "helm-chart"]
 
 [store]
 # Relativo al workspace de corrida

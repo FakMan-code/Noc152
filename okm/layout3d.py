@@ -22,6 +22,7 @@ from okm.humanize import (
     human_summary,
     is_noise_service,
     kind_label,
+    source_display_name,
     system_intro,
 )
 from okm.models import Claim, EpistemicKind, Facet, Service
@@ -104,36 +105,24 @@ def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
     """Top-level microservices map — one node per real service."""
     run = store.latest_run() or {}
     source_uri = run.get("source_uri")
+    system_name = source_display_name(source_uri)
     services = [s for s in store.list_services() if not is_noise_service(s.name)]
-    # Prefer product services first
-    priority = [
-        "frontend",
-        "productcatalogservice",
-        "cartservice",
-        "checkoutservice",
-        "paymentservice",
-        "shippingservice",
-        "currencyservice",
-        "recommendationservice",
-        "emailservice",
-        "adservice",
-        "shoppingassistantservice",
-        "loadgenerator",
-    ]
-    rank = {n: i for i, n in enumerate(priority)}
-    services.sort(key=lambda s: (rank.get(s.name.lower(), 99), s.name.lower()))
+    # Más claims primero (más “denso” operacionalmente), luego nombre
+    services.sort(
+        key=lambda s: (-len(store.claims_for(s.service_id)), s.name.lower()),
+    )
 
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     details: dict[str, dict[str, Any]] = {}
     trace_paths: list[list[str]] = []
 
-    hub_id = "sys:boutique"
+    hub_id = "sys:root"
     nodes.append(
         {
             "id": hub_id,
             "kind": "service",
-            "label": "Online Boutique",
+            "label": system_name,
             "layer": 0,
             "color": NODE_COLOR["hub"],
             "size": 1.55,
@@ -143,14 +132,14 @@ def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
         }
     )
     details[hub_id] = {
-        "title": "Online Boutique",
+        "title": system_name,
         "kind": "service",
         "kind_label": "sistema",
-        "subtitle": "Demo pública de microservicios (Google)",
+        "subtitle": "Hub del source ingerido",
         "summary": (
-            "Tienda online de ejemplo partida en varios microservicios. "
+            f"Mapa de servicios detectados en «{system_name}». "
             "Cada nodo alrededor es un servicio real del repo. "
-            "Click en uno y elegilo en el selector para ver su expediente completo."
+            "Click en uno para ver su expediente completo."
         ),
         "meta": {
             "fuente": source_uri or "local",
@@ -178,14 +167,17 @@ def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
         obs = sum(v.get("observed", 0) for v in cov.values())
         gap = sum(v.get("gap", 0) for v in cov.values())
         health = service_health(store, s)
+        short = s.name
+        if short.lower().endswith("service") and len(short) > 7:
+            short = short[: -len("service")]
         nodes.append(
             {
                 "id": nid,
                 "kind": "service",
-                "label": s.name.replace("service", "").replace("Service", "") or s.name,
+                "label": short or s.name,
                 "layer": 1,
                 "color": health["color"],
-                "size": 1.15 if s.name.lower() == "frontend" else 1.0,
+                "size": 1.0,
                 "facet": None,
                 "service_name": s.name,
                 "health": health["health"],
@@ -413,11 +405,15 @@ def build_scene_graph(store: ExpedienteStore, service: Service) -> dict[str, Any
                 details[cid]["subtitle"] = "Hueco informativo · " + details[cid].get("subtitle", "")
             trace_paths.append([svc_id, fid, cid])
 
-    # Dependencies under topology (runtime packages preferred: skip pure test tooling when possible)
+    # Dependencies under topology (observed first, then name)
     topo_id = facet_ids["topology"]
-    prefer = {"anyio", "httpcore", "certifi", "idna", "h11", "sniffio", "httpx"}
     pkg_rels = [r for r in relations if r.kind == "depends_on_package"]
-    pkg_rels.sort(key=lambda r: (0 if r.to_ref.replace("pip:", "") in prefer else 1, r.to_ref))
+    pkg_rels.sort(
+        key=lambda r: (
+            0 if r.epistemic == EpistemicKind.OBSERVED else 1,
+            r.to_ref.lower(),
+        )
+    )
     for r in pkg_rels[:14]:
         label = r.to_ref.replace("pip:", "")
         did = f"dep:{label}"

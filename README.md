@@ -1,46 +1,74 @@
-# Operational Knowledge Motor (OKM) / Noc152
+# Noc152
 
-Repo: https://github.com/FakMan-code/Proyecto-Noc-152
+Expediente operacional + mapa 3D consultable.
 
-Motor genérico que lee un repositorio (local o git público), construye un **expediente operacional** consultable y separa:
+Noc152 lee un repositorio (local o git público), detecta **servicios** por manifiestos, guarda claims con evidencia abríble y los muestra en un briefing interactivo. No asume productos ni organizaciones: la fuente la elegís vos.
 
-- **observed** — hecho con evidencia abríble  
-- **inferred** — hipótesis / heurística débil  
-- **gap** — lo que no se encontró o está fuera de alcance  
+## Principios
 
-No hardcodea productos, servicios ni organizaciones. Prex u otro sistema se conectan después como *fuente*, no como lógica del motor.
+1. Unidad = **servicio** (heurística por `package.json`, `pyproject.toml`, `go.mod`, `Dockerfile`, …).  
+2. Sin evidencia no hay `observed` (queda `inferred` o `gap`).  
+3. Reglas locales en `config/default.toml`, no nombres de negocio en el código.  
+4. Preguntas: dossier del expediente + LLM local opcional (Ollama); si no hay modelo, retrieval determinista.
 
-## Demo rápida (repo público)
+## Requisitos
 
-Requiere Python 3.11+ y `git` en el PATH.
+- Python 3.11+  
+- `git` en el PATH (para URLs)  
+- Opcional: [Ollama](https://ollama.com) con un modelo de chat (p. ej. `qwen2.5:7b`) para respuestas tipo agente  
+
+```powershell
+pip install -r requirements.txt
+```
+
+## Uso rápido
 
 ```powershell
 cd c:\Users\mglembo\Desktop\Proyecto-Noc-152
 
-# 1) Ingestar un repo público (ejemplo: Flask)
-python -m okm.cli ingest https://github.com/pallets/flask --workspace .demo_flask
+# Ingestar cualquier repo (ejemplo público de microservicios)
+python -m okm.cli ingest https://github.com/GoogleCloudPlatform/microservices-demo --workspace .demo_ws
 
-# 2) Listar servicios detectados
-python -m okm.cli services --workspace .demo_flask
+# Listar / inspeccionar
+python -m okm.cli services --workspace .demo_ws
+python -m okm.cli show <servicio> --workspace .demo_ws
 
-# 3) Ver la ficha (reemplazá el nombre si el listado muestra otro)
-python -m okm.cli show flask --workspace .demo_flask
-
-# 4) Export JSON (forma consumible por una Action / API)
-python -m okm.cli export flask --workspace .demo_flask > flask_expediente.json
+# Briefing 3D + preguntas
+python -m okm.cli serve --workspace .demo_ws
+# → http://127.0.0.1:8765/
 ```
 
-Otro ejemplo más chico:
+También podés apuntar a una carpeta local:
 
 ```powershell
-python -m okm.cli ingest https://github.com/encode/httpx --workspace .demo_httpx
-python -m okm.cli services --workspace .demo_httpx
-python -m okm.cli show httpx --workspace .demo_httpx
+python -m okm.cli ingest . --workspace .demo_self
+python -m okm.cli serve --workspace .demo_self
 ```
 
-## Qué queda guardado
+## Controles del mapa
 
-En `--workspace`:
+| Acción | Efecto |
+|---|---|
+| Click izquierdo + arrastrar | Orbitar |
+| Rueda | Zoom |
+| Click-rueda + arrastrar | Panear |
+| Click en nodo | Detalle |
+| Doble click / Ampliar | Acercar (o entrar al servicio en vista sistema) |
+| Traza | Animar caminos |
+| Preguntar | Agente local grounded en el expediente |
+
+## Colores de salud
+
+| Color | Significado |
+|---|---|
+| Verde | Ok |
+| Amarillo | Alerta a revisar (cuando haya fuente ops) |
+| Rojo | Roto / fallando (reservado a evidencia ops) |
+| Violeta | Hub del sistema (nodo principal del mapa) |
+
+En modo solo-repo (sin monitoreo), los servicios se muestran en verde.
+
+## Artefactos en `--workspace`
 
 | Artefacto | Rol |
 |---|---|
@@ -48,17 +76,15 @@ En `--workspace`:
 | `blobs/` | contenido content-addressed (SHA-256) |
 | `source_cache/` | clone shallow del git (si aplica) |
 
-Cada claim **observed** apunta a evidencia con `path` + líneas.  
-`okm open <evidence_id>` reabre el fragmento desde el blob.
+## API local (con `serve`)
 
-## Principios en el código
+- `GET /api/meta`  
+- `GET /api/graph/__system__` — mapa de todos los servicios  
+- `GET /api/graph/<servicio>` — expediente 3D de un servicio  
+- `POST /api/ask` — `{ "question": "...", "service": "<nombre>" }`  
+- `GET /api/evidence/<id>`  
 
-1. Unidad = **servicio** (heurística por manifiestos: `package.json`, `pyproject.toml`, `go.mod`, `Dockerfile`, …).  
-2. Sin evidencia no se acepta `observed` (se degrada a `inferred`).  
-3. Facetas sin señales del repo → `gap` explícito (`signals`, `failure` en demo repo-only).  
-4. Reglas de la organización en `config/default.toml`, no nombres de negocio en el código.
-
-## Comandos
+## Comandos CLI
 
 ```text
 python -m okm.cli ingest <path|git-url> [--workspace DIR] [--config FILE]
@@ -67,54 +93,26 @@ python -m okm.cli show <service> [--workspace DIR]
 python -m okm.cli open <evidence_id> [--workspace DIR]
 python -m okm.cli coverage <service> [--workspace DIR]
 python -m okm.cli export <service> [--workspace DIR]
+python -m okm.cli serve [--workspace DIR] [--host 127.0.0.1] [--port 8765]
 ```
 
-## Qué es esta demo (y qué no)
+## Qué demuestra (y qué no)
 
-**Sí demuestra**
+**Sí**
 
 - Ingesta genérica  
-- Expediente tipado consultable  
-- Procedencia abríble  
-- Observado / inferido / hueco  
-- Export listo para enganchar a Copilot Studio después  
+- Expediente tipado con procedencia  
+- Mapa 3D + drill-down  
+- Preguntas auditadas contra el expediente  
 
-**No es todavía**
+**Todavía no**
 
-- Datadog / alertas  
-- Multi-fuente Prex completa  
-- LLM en el pipeline (el briefing usa retrieval determinista)  
+- Conectores ops (monitoreo/alertas) vía MCP  
+- Autenticación / multi-usuario  
+- Multi-fuente completa más allá del repo  
 
-## Noc152 (mapa 3D + preguntas auditadas)
+## Arquitectura en una frase
 
-Viewer estilo Archify (nodos / edges / drill-down) con estética Cursor. El layout 3D lo calcula **NumPy**; el navegador usa Three.js (órbita, zoom con rueda, click para detalle).
+`ingest` → expediente SQLite → `layout3d` (NumPy) + UI Three.js → `ask`/`agent` (retrieval + Ollama opcional).
 
-```powershell
-pip install -r requirements.txt
-
-# Demo microservicios (recomendado): Online Boutique de Google
-python -m okm.cli ingest https://github.com/GoogleCloudPlatform/microservices-demo --workspace .demo_boutique
-python -m okm.cli serve --workspace .demo_boutique
-
-# Demo chica (librería, un solo "servicio"):
-# python -m okm.cli serve --workspace .demo_httpx
-# → http://127.0.0.1:8765/
-```
-
-- Click izquierdo = orbitar · rueda = zoom · **click-rueda (MMB)** = panear el mapa  
-- Click = panel · doble click / **Ampliar** = acercar · **Traza** / filtros por área  
-- Preguntas: agente local via **Ollama `qwen2.5:7b`** + dossier del expediente (si Ollama falla, usa retrieval)  
-
-Endpoints:
-
-- `GET /api/meta` — workspace / run / servicios  
-- `GET /api/graph/<nombre>` — escena 3D (nodos, edges, details)  
-- `GET /api/services/<nombre>` — brief por faceta  
-- `POST /api/ask` — `{ "question": "...", "service": "httpx" }`  
-- `GET /api/evidence/<id>` — excerpt abríble  
-
-## Siguiente paso natural
-
-1. Publicar `export` / `ask` como Action OpenAPI para Copilot Studio (contrato HTTP del briefing).  
-2. Segunda fuente (docs) con el mismo contrato.  
-3. Resolver servicio desde una alerta sin hardcodear nombres.
+El grafo se inspira en la idea de diagramas explorables (tipo Archify: nodos, relaciones, detalle), pero el motor y los datos son propios de Noc152.

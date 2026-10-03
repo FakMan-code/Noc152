@@ -104,7 +104,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="okm",
-        description="Operational Knowledge Motor — generic expediente from any source repo",
+        description="Noc152 — expediente operacional genérico desde cualquier repo",
     )
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
