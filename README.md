@@ -1,4 +1,6 @@
-# Operational Knowledge Motor (OKM)
+# Operational Knowledge Motor (OKM) / Noc152
+
+Repo: https://github.com/FakMan-code/Proyecto-Noc-152
 
 Motor genérico que lee un repositorio (local o git público), construye un **expediente operacional** consultable y separa:
 
