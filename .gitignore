@@ -1,0 +1,13 @@
+.okm_workspace/
+.demo_*/
+**/source_cache/
+**/blobs/
+**/expediente.sqlite3
+__pycache__/
+*.pyc
+.venv/
+venv/
+flask_expediente.json
+*_expediente.json
+para verrrr.txt
+Hola.py

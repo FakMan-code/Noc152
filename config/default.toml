@@ -1,0 +1,64 @@
+# Reglas de organización — no nombres de servicios.
+# El motor es genérico: cualquier repositorio/fuente autorizada.
+
+[ingest]
+# Extensiones que se leen como texto addressable
+text_extensions = [
+  ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".kt",
+  ".rb", ".php", ".cs", ".scala", ".swift",
+  ".yml", ".yaml", ".toml", ".json", ".xml", ".ini", ".cfg", ".conf",
+  ".md", ".rst", ".txt", ".env.example",
+  ".Dockerfile", ".dockerfile",
+  ".tf", ".hcl", ".proto", ".graphql", ".sql",
+  ".sh", ".bash", ".ps1", ".bat",
+]
+# Nombres de archivo sin extensión que sí importan
+special_filenames = [
+  "Dockerfile", "Makefile", "Procfile", "Jenkinsfile", "Vagrantfile",
+  "go.mod", "go.sum", "Cargo.toml", "package.json", "pyproject.toml",
+  "requirements.txt", "Pipfile", "Gemfile", "pom.xml", "build.gradle",
+  "README", "LICENSE", "CHANGELOG",
+]
+max_file_bytes = 1_048_576
+max_files = 8_000
+
+[ingest.ignore_dirs]
+names = [
+  ".git", ".hg", ".svn", ".venv", "venv", "node_modules", "dist", "build",
+  "target", "__pycache__", ".tox", ".mypy_cache", ".pytest_cache",
+  "vendor", "coverage", ".idea", ".vscode",
+  ".okm_workspace", ".demo_httpx", ".demo_boutique", ".demo_noc152",
+  "blobs", "source_cache",
+]
+
+[ingest.ignore_globs]
+patterns = [
+  "*.min.js", "*.min.css", "*.map", "*.lock", "package-lock.json",
+  "yarn.lock", "pnpm-lock.yaml", "*.pyc", "*.pyo", "*.so", "*.dll",
+  "*.jar", "*.wasm", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp",
+  "*.ico", "*.pdf", "*.zip", "*.tar", "*.gz",
+]
+
+[extract]
+# Patrones deterministas (genéricos, no de un dominio)
+http_url_regex = '''https?://[^\s\"'<>]+'''
+env_var_regex = '''(?<![A-Za-z0-9_])([A-Z][A-Z0-9_]{2,})(?![A-Za-z0-9_])'''
+# Import / require superficiales por lenguaje
+python_import_regex = '''^\s*(?:from\s+(\S+)\s+import|import\s+(\S+))'''
+js_import_regex = '''(?:import\s+.+?\s+from\s+['\"]([^'\"]+)['\"]|require\(\s*['\"]([^'\"]+)['\"]\s*\))'''
+go_import_regex = '''^\s*\"([^\"]+)\"\s*$'''
+
+[resolve]
+# Heurística genérica: un "servicio candidato" por raíz de manifiesto
+manifest_files = [
+  "package.json", "pyproject.toml", "go.mod", "Cargo.toml",
+  "pom.xml", "build.gradle", "Dockerfile", "docker-compose.yml",
+  "docker-compose.yaml", "Chart.yaml",
+]
+# Si no hay manifiestos, el root del source es un servicio candidato
+fallback_root_service = true
+
+[store]
+# Relativo al workspace de corrida
+db_filename = "expediente.sqlite3"
+blobs_dirname = "blobs"

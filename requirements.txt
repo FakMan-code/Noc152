@@ -1,0 +1,5 @@
+# OKM / Noc152
+# Core CLI works with stdlib only.
+# 3D briefing layout needs NumPy:
+
+numpy>=1.26

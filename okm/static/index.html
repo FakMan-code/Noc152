@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Noc152</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0c;
+      --panel: #141414;
+      --panel-2: #1a1a1a;
+      --line: #2a2a2a;
+      --text: #ededed;
+      --muted: #8b8b8b;
+      --accent: #f54e00;
+      --accent-dim: rgba(245, 78, 0, 0.16);
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #ef4444;
+      --blue: #88a4bf;
+      --dep: #38bdf8;
+      --font: "Outfit", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; overflow: hidden;
+      background: var(--bg); color: var(--text); font-family: var(--font);
+    }
+    #stage { position: absolute; inset: 0; }
+    .chrome { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+    .chrome > * { pointer-events: auto; }
+
+    .topbar {
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 0.85rem 1rem;
+      background: linear-gradient(180deg, rgba(12,12,12,0.94), rgba(12,12,12,0));
+    }
+    .brand { display: flex; align-items: baseline; gap: 0.65rem; flex-wrap: wrap; }
+    .brand h1 { margin: 0; font-size: 1.55rem; font-weight: 700; letter-spacing: -0.04em; }
+    .brand h1 em { font-style: normal; color: var(--accent); }
+    .brand .tag {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 999px; padding: 0.18rem 0.45rem;
+    }
+    .top-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+    select, button, textarea {
+      font: inherit; color: var(--text); background: var(--panel-2);
+      border: 1px solid var(--line); border-radius: 8px;
+    }
+    select { padding: 0.4rem 0.55rem; min-width: 130px; }
+    button { padding: 0.4rem 0.7rem; cursor: pointer; transition: border-color 140ms ease, background 140ms ease; }
+    button:hover { border-color: #444; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    button.primary:hover { filter: brightness(1.05); }
+    button:disabled { opacity: 0.45; cursor: wait; }
+    button.active { border-color: var(--accent); color: #fff; background: var(--accent-dim); }
+
+    .filters {
+      position: absolute; left: 1rem; top: 3.7rem;
+      display: flex; flex-wrap: wrap; gap: 0.35rem;
+      max-width: min(520px, calc(100% - 2rem));
+    }
+    .filters button {
+      font-size: 0.74rem; padding: 0.28rem 0.55rem; border-radius: 999px; color: var(--muted);
+    }
+    .filters button.on {
+      color: #fff; border-color: rgba(245,78,0,0.5); background: var(--accent-dim);
+    }
+
+    .hint {
+      position: absolute; left: 1rem; bottom: 1rem;
+      font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
+      background: rgba(20,20,20,0.88); border: 1px solid var(--line);
+      border-radius: 8px; padding: 0.45rem 0.6rem;
+      max-width: min(460px, calc(100% - 2rem)); line-height: 1.4;
+    }
+
+    .dock {
+      position: absolute; top: 3.6rem; right: 0.85rem;
+      width: min(390px, calc(100% - 1.5rem));
+      max-height: calc(100% - 4.6rem);
+      display: flex; flex-direction: column; gap: 0.55rem;
+    }
+    .panel {
+      background: rgba(20,20,20,0.93); border: 1px solid var(--line); border-radius: 12px;
+      backdrop-filter: blur(10px); overflow: hidden;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+    }
+    .panel-h {
+      display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--line);
+    }
+    .panel-h strong { font-size: 0.95rem; letter-spacing: -0.02em; }
+    .panel-h .sub { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); }
+    .panel-b { padding: 0.75rem 0.85rem 0.9rem; overflow: auto; max-height: min(46vh, 460px); }
+    .empty { color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+    .node-title { margin: 0 0 0.25rem; font-size: 1.05rem; letter-spacing: -0.02em; }
+    .node-sub { margin: 0 0 0.55rem; color: var(--muted); font-size: 0.84rem; }
+    .body-text { margin: 0 0 0.65rem; color: #d8d8d8; font-size: 0.9rem; line-height: 1.45; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.65rem; }
+    .chip {
+      font-family: var(--mono); font-size: 0.66rem; color: var(--muted);
+      border: 1px solid var(--line); border-radius: 999px; padding: 0.15rem 0.4rem;
+    }
+    .chip.accent { color: var(--accent); border-color: rgba(245,78,0,0.4); background: var(--accent-dim); }
+
+    details.block {
+      border: 1px solid var(--line); border-radius: 8px; margin-bottom: 0.4rem; background: var(--panel);
+    }
+    details.block[open] { border-color: #3a3a3a; }
+    details.block summary {
+      cursor: pointer; list-style: none; padding: 0.5rem 0.65rem;
+      font-size: 0.84rem; font-weight: 600; user-select: none;
+    }
+    details.block summary::-webkit-details-marker { display: none; }
+    .items { margin: 0; padding: 0 0.65rem 0.55rem; list-style: none; display: grid; gap: 0.4rem; }
+    .items li {
+      border-left: 2px solid #333; padding-left: 0.5rem;
+      font-size: 0.82rem; line-height: 1.4; color: #d4d4d4;
+    }
+    .items li.observed { border-color: var(--green); }
+    .items li.inferred { border-color: var(--amber); }
+    .items li.gap { border-color: #94a3b8; }
+    .items li.alert { border-color: var(--amber); }
+    .items li.failing { border-color: var(--red); }
+    .items button.link {
+      display: inline; border: 0; background: none; color: var(--accent); padding: 0;
+      font-family: var(--mono); font-size: 0.7rem; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+
+    .legend-row {
+      display: grid; grid-template-columns: 10px 1fr; gap: 0.45rem 0.55rem;
+      align-items: start; margin: 0.35rem 0; font-size: 0.8rem; line-height: 1.35;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 0.3rem; }
+    .dot.service { background: #8b5cf6; }
+    .dot.ok { background: var(--green); }
+    .dot.degraded { background: var(--amber); }
+    .dot.alert { background: var(--amber); }
+    .dot.failing { background: var(--red); }
+    .dot.facet { background: var(--blue); }
+    .dot.dependency { background: var(--dep); }
+    .dot.claim { background: #d4d4d4; }
+    .dot.gap { background: #94a3b8; }
+
+    .ask-row { display: grid; gap: 0.4rem; }
+    textarea {
+      width: 100%; min-height: 64px; resize: vertical;
+      padding: 0.55rem 0.65rem; background: #101010;
+    }
+    textarea:focus, select:focus, button:focus-visible {
+      outline: 1px solid rgba(245, 78, 0, 0.55); outline-offset: 1px;
+    }
+    .thread {
+      display: grid; gap: 0.45rem; max-height: 150px; overflow: auto; margin-bottom: 0.5rem;
+    }
+    .bubble {
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.45rem 0.55rem;
+      font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap; background: #101010;
+    }
+    .bubble.user { border-color: rgba(245,78,0,0.35); background: var(--accent-dim); }
+    .bubble .who { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); margin-bottom: 0.15rem; }
+    .sug { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .sug button { font-size: 0.72rem; padding: 0.22rem 0.45rem; color: var(--muted); border-radius: 999px; }
+
+    dialog {
+      border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+      color: var(--text); width: min(680px, calc(100% - 2rem)); padding: 0;
+    }
+    dialog::backdrop { background: rgba(0,0,0,0.65); }
+    .dlg-h {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--line); font-weight: 600;
+    }
+    .dlg-h button { padding: 0.15rem 0.45rem; }
+    .dlg-b { padding: 0.85rem; }
+    .dlg-b pre {
+      margin: 0.5rem 0 0; white-space: pre-wrap; font-family: var(--mono);
+      font-size: 0.74rem; line-height: 1.45; background: #0a0a0a;
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem;
+      max-height: 50vh; overflow: auto;
+    }
+
+    @media (max-width: 720px) {
+      .dock { top: auto; bottom: 0; right: 0; left: 0; width: 100%; max-height: 48vh; }
+      .hint, .filters { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div class="chrome">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Noc<em>152</em></h1>
+        <span class="tag">mapa 3D · expediente en español</span>
+      </div>
+      <div class="top-actions">
+        <select id="serviceSelect" aria-label="Servicio"></select>
+        <button type="button" id="btnIntro">¿Qué es esto?</button>
+        <button type="button" id="btnTrace">Traza</button>
+        <button type="button" id="btnReset">Reset vista</button>
+        <button type="button" class="primary" id="btnExpand" disabled>Ampliar</button>
+      </div>
+    </header>
+
+    <div class="filters" id="filters" aria-label="Filtros por área"></div>
+    <div class="hint" id="hint">Cargando mapa…</div>
+
+    <aside class="dock">
+      <section class="panel">
+        <div class="panel-h">
+          <strong id="detailTitle">Nodo</strong>
+          <span class="sub" id="detailKind">sin selección</span>
+        </div>
+        <div class="panel-b" id="detailBody">
+          <p class="empty">Abrí un nodo para leer qué significa.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h">
+          <strong>Preguntar</strong>
+          <span class="sub" id="askMode">agente · Ollama</span>
+        </div>
+        <div class="panel-b">
+          <div class="thread" id="thread"></div>
+          <div class="ask-row">
+            <div class="sug">
+              <button type="button" data-q="¿Qué es este servicio?">qué es</button>
+              <button type="button" data-q="¿De qué depende?">dependencias</button>
+              <button type="button" data-q="¿Hay señales de monitoreo?">señales</button>
+              <button type="button" data-q="¿Qué gaps tiene el expediente?">huecos</button>
+            </div>
+            <textarea id="question" placeholder="Preguntá en español…"></textarea>
+            <button type="button" class="primary" id="askBtn">Preguntar</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <dialog id="evidenceDialog">
+    <div class="dlg-h">
+      <span id="dlgTitle">Evidencia</span>
+      <button type="button" id="dlgClose">✕</button>
+    </div>
+    <div class="dlg-b">
+      <span class="chip accent" id="dlgRef"></span>
+      <pre id="dlgExcerpt"></pre>
+    </div>
+  </dialog>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+    const state = {
+      service: null,
+      graph: null,
+      selectedId: null,
+      activeFacets: new Set(["identity", "topology", "runtime", "signals", "failure"]),
+      nodeMeshes: new Map(),
+      labelObjects: new Map(),
+      edgeLines: [],
+      tracing: false,
+      traceT: 0,
+      pulse: null,
+    };
+
+    const el = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "")
+      .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+
+    async function api(path, opts) {
+      const res = await fetch(path, opts);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    const stage = el("stage");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0c0c0c);
+    scene.fog = new THREE.Fog(0x0c0c0c, 18, 42);
+
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+    camera.position.set(8.5, 5.5, 10.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    stage.appendChild(renderer.domElement);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.domElement.style.position = "absolute";
+    labelRenderer.domElement.style.inset = "0";
+    labelRenderer.domElement.style.pointerEvents = "none";
+    stage.appendChild(labelRenderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 2.2;
+    controls.maxDistance = 40;
+    controls.target.set(0, 0.5, 0);
+    // Controles sin solaparse:
+    // click izq = orbitar · rueda = zoom · click rueda (MMB) = panear el mapa
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.PAN,
+    };
+    // Click derecho no panea (eso queda exclusivo del click-rueda)
+    delete controls.mouseButtons.RIGHT;
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
+    // Pan un poco más sensible al arrastrar con la rueda
+    controls.panSpeed = 1.15;
+    controls.zoomSpeed = 1.05;
+    controls.rotateSpeed = 0.9;
+
+    renderer.domElement.addEventListener("auxclick", (e) => e.preventDefault());
+    renderer.domElement.addEventListener("pointerdown", (e) => {
+      if (e.button === 1) {
+        renderer.domElement.style.cursor = "grabbing";
+      }
+    });
+    window.addEventListener("pointerup", () => {
+      renderer.domElement.style.cursor = "default";
+    });
+    // Evitar que el click-rueda haga scroll de página / autoscroll
+    renderer.domElement.addEventListener("mousedown", (e) => {
+      if (e.button === 1) e.preventDefault();
+    });
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const key = new THREE.DirectionalLight(0xffffff, 0.85);
+    key.position.set(6, 10, 4);
+    scene.add(key);
+    const rim = new THREE.PointLight(0xf54e00, 0.55, 40);
+    rim.position.set(-4, 3, -3);
+    scene.add(rim);
+
+    const grid = new THREE.GridHelper(40, 40, 0x2a2a2a, 0x1a1a1a);
+    grid.position.y = -3.2;
+    scene.add(grid);
+
+    const graphRoot = new THREE.Group();
+    scene.add(graphRoot);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function resize() {
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function clearGraph() {
+      while (graphRoot.children.length) {
+        const obj = graphRoot.children[0];
+        graphRoot.remove(obj);
+        obj.traverse?.((c) => {
+          c.geometry?.dispose?.();
+          if (c.material) {
+            if (Array.isArray(c.material)) c.material.forEach((m) => m.dispose());
+            else c.material.dispose();
+          }
+        });
+      }
+      state.nodeMeshes.clear();
+      state.labelObjects.clear();
+      state.edgeLines = [];
+      state.pulse = null;
+    }
+
+    function makeLabel(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      div.style.cssText = `
+        font-family: var(--mono); font-size: 10px; color: #cfcfcf;
+        padding: 2px 6px; border: 1px solid #2a2a2a; border-radius: 999px;
+        background: rgba(12,12,12,0.82); white-space: nowrap; transform: translateY(-14px);
+      `;
+      return new CSS2DObject(div);
+    }
+
+    function nodeVisible(n) {
+      if (n.kind === "service") return true;
+      if (!n.facet) return true;
+      return state.activeFacets.has(n.facet);
+    }
+
+    function applyVisibility() {
+      if (!state.graph) return;
+      const visibleIds = new Set(
+        state.graph.nodes.filter(nodeVisible).map((n) => n.id)
+      );
+      for (const [id, mesh] of state.nodeMeshes) {
+        const on = visibleIds.has(id);
+        mesh.visible = on;
+        const lab = state.labelObjects.get(id);
+        if (lab) lab.visible = on;
+      }
+      for (const line of state.edgeLines) {
+        const { source, target } = line.userData;
+        line.visible = visibleIds.has(source) && visibleIds.has(target);
+      }
+    }
+
+    function buildGraph(graph) {
+      clearGraph();
+      state.graph = graph;
+      const idToPos = new Map(graph.nodes.map((n) => [n.id, new THREE.Vector3(n.x, n.y, n.z)]));
+
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x3a3a3a, transparent: true, opacity: 0.85 });
+      for (const e of graph.edges) {
+        const a = idToPos.get(e.source);
+        const b = idToPos.get(e.target);
+        if (!a || !b) continue;
+        const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+        const line = new THREE.Line(geo, lineMat.clone());
+        line.userData = { source: e.source, target: e.target };
+        graphRoot.add(line);
+        state.edgeLines.push(line);
+      }
+
+      for (const n of graph.nodes) {
+        const radius = 0.22 * (n.size || 1);
+        const geo = new THREE.SphereGeometry(radius, 28, 28);
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(n.color || "#e4e4e4"),
+          metalness: 0.15,
+          roughness: 0.35,
+          emissive: new THREE.Color(n.color || "#e4e4e4"),
+          emissiveIntensity: n.kind === "service" ? 0.35 : 0.12,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(idToPos.get(n.id));
+        mesh.userData.nodeId = n.id;
+        graphRoot.add(mesh);
+        state.nodeMeshes.set(n.id, mesh);
+
+        const label = makeLabel(n.label);
+        label.position.copy(mesh.position);
+        graphRoot.add(label);
+        state.labelObjects.set(n.id, label);
+      }
+
+      // pulse sphere for trace
+      const pulseGeo = new THREE.SphereGeometry(0.12, 16, 16);
+      const pulseMat = new THREE.MeshBasicMaterial({ color: 0xf54e00 });
+      state.pulse = new THREE.Mesh(pulseGeo, pulseMat);
+      state.pulse.visible = false;
+      graphRoot.add(state.pulse);
+
+      applyVisibility();
+    }
+
+    function setHighlight(id) {
+      for (const [nid, mesh] of state.nodeMeshes) {
+        const on = nid === id;
+        const kind = state.graph.nodes.find((n) => n.id === nid)?.kind;
+        mesh.material.emissiveIntensity = on ? 0.75 : (kind === "service" ? 0.35 : 0.12);
+        mesh.scale.setScalar(on ? 1.25 : 1);
+      }
+      // edge glow for neighbors
+      for (const line of state.edgeLines) {
+        const linked = line.userData.source === id || line.userData.target === id;
+        line.material.color.set(linked ? 0xf54e00 : 0x3a3a3a);
+        line.material.opacity = linked ? 1 : 0.55;
+      }
+    }
+
+    function focusNode(id, expand = false) {
+      const mesh = state.nodeMeshes.get(id);
+      if (!mesh) return;
+      const target = mesh.position.clone();
+      controls.target.lerp(target, expand ? 1 : 0.65);
+      if (expand) camera.position.copy(target.clone().add(new THREE.Vector3(2.8, 1.6, 2.8)));
+      selectNode(id);
+    }
+
+    function renderIntro(intro) {
+      if (!intro) return;
+      const legend = (intro.node_legend || []).map((row) => {
+        const kind = row.kind === "claim" ? "claim" : row.kind;
+        return `<div class="legend-row"><span class="dot ${esc(kind)}"></span><div><strong>${esc(row.label)}</strong><div class="empty" style="margin:0">${esc(row.text)}</div></div></div>`;
+      }).join("");
+      const tips = (intro.tips || []).map((t) => `<li class="inferred">${esc(t)}</li>`).join("");
+      el("detailTitle").textContent = intro.title || "¿Qué estás mirando?";
+      el("detailKind").textContent = "guía";
+      el("detailBody").innerHTML = `
+        <p class="body-text">${esc(intro.body)}</p>
+        <p class="body-text">${esc(intro.what_is_it)}</p>
+        <details class="block" open>
+          <summary>Colores (rojo = fallando)</summary>
+          <div style="padding:0 .65rem .55rem">${legend}</div>
+        </details>
+        <details class="block" open>
+          <summary>Tips</summary>
+          <ul class="items">${tips}</ul>
+        </details>
+      `;
+    }
+
+    function selectNode(id) {
+      state.selectedId = id;
+      setHighlight(id);
+      el("btnExpand").disabled = !id;
+      const detail = state.graph?.details?.[id];
+      if (!detail) {
+        el("detailTitle").textContent = "Nodo";
+        el("detailKind").textContent = "sin datos";
+        el("detailBody").innerHTML = `<p class="empty">Sin detalle para este nodo.</p>`;
+        return;
+      }
+      el("detailTitle").textContent = detail.title;
+      el("detailKind").textContent = detail.kind_label || detail.kind || "";
+      const chips = [];
+      if (detail.meta) {
+        for (const [k, v] of Object.entries(detail.meta)) {
+          if (v == null || v === "") continue;
+          chips.push(`<span class="chip">${esc(k)}: ${esc(v)}</span>`);
+        }
+      }
+      const sections = (detail.sections || []).map((sec, idx) => {
+        const items = (sec.items || []).map((it) => {
+          if (it.statement) {
+            const ev = (it.evidence && it.evidence[0]) || null;
+            const evBtn = ev
+              ? `<div><button class="link" type="button" data-eid="${esc(ev.id)}">${esc(ev.ref)}</button></div>`
+              : "";
+            return `<li class="${esc(it.kind || "")}">${esc(it.statement)}${evBtn}</li>`;
+          }
+          if (it.ref) {
+            return `<li class="observed"><button class="link" type="button" data-eid="${esc(it.id)}">${esc(it.ref)}</button>
+              <div style="color:var(--muted);margin-top:2px">${esc((it.excerpt || "").slice(0, 200))}</div></li>`;
+          }
+          return "";
+        }).join("");
+        return `<details class="block" ${idx === 0 ? "open" : ""}>
+          <summary>${esc(sec.title)} · ${(sec.items || []).length}</summary>
+          <ul class="items">${items || "<li>vacío</li>"}</ul>
+        </details>`;
+      }).join("");
+
+      const openSvc = detail.open_service
+        ? `<p style="margin:0 0 .7rem"><button type="button" class="primary" data-open-service="${esc(detail.open_service)}">Entrar a ${esc(detail.open_service)}</button></p>`
+        : "";
+      el("detailBody").innerHTML = `
+        <h3 class="node-title">${esc(detail.title)}</h3>
+        <p class="node-sub">${esc(detail.subtitle || "")}</p>
+        <p class="body-text">${esc(detail.summary || "")}</p>
+        ${openSvc}
+        <div class="chips">${chips.join("")}</div>
+        ${sections || "<p class='empty'>Sin más detalle desplegable.</p>"}
+      `;
+    }
+
+    function pick(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const meshes = [...state.nodeMeshes.values()].filter((m) => m.visible);
+      return raycaster.intersectObjects(meshes, false)[0]?.object?.userData?.nodeId || null;
+    }
+
+    let lastClick = 0;
+    renderer.domElement.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      const id = pick(e);
+      if (!id) return;
+      const now = performance.now();
+      const node = state.graph?.nodes?.find((n) => n.id === id);
+      if (now - lastClick < 280 && state.selectedId === id) {
+        if (node?.service_name && state.graph?.view === "system") {
+          enterService(node.service_name);
+        } else {
+          focusNode(id, true);
+        }
+      } else {
+        selectNode(id);
+      }
+      lastClick = now;
+    });
+
+    function startTrace() {
+      if (!state.graph?.trace_paths?.length) return;
+      state.tracing = true;
+      state.traceT = 0;
+      el("btnTrace").classList.add("active");
+      el("btnTrace").textContent = "Trazando…";
+    }
+
+    function updateTrace(dt) {
+      if (!state.tracing || !state.pulse || !state.graph) return;
+      const paths = state.graph.trace_paths || [];
+      if (!paths.length) return;
+      state.traceT += dt * 0.35;
+      const pathIndex = Math.floor(state.traceT) % paths.length;
+      const local = state.traceT - Math.floor(state.traceT);
+      const path = paths[pathIndex].filter((id) => state.nodeMeshes.get(id)?.visible);
+      if (path.length < 2) return;
+      const segCount = path.length - 1;
+      const f = local * segCount;
+      const i = Math.min(Math.floor(f), segCount - 1);
+      const t = f - i;
+      const a = state.nodeMeshes.get(path[i]).position;
+      const b = state.nodeMeshes.get(path[i + 1]).position;
+      state.pulse.visible = true;
+      state.pulse.position.lerpVectors(a, b, t);
+      // highlight current edge endpoints softly
+      setHighlight(path[i + 1]);
+      if (state.traceT > paths.length * 2) {
+        state.tracing = false;
+        state.pulse.visible = false;
+        el("btnTrace").classList.remove("active");
+        el("btnTrace").textContent = "Traza";
+        if (state.selectedId) setHighlight(state.selectedId);
+      }
+    }
+
+    let last = performance.now();
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      controls.update();
+      updateTrace(dt);
+      rim.position.x = Math.cos(now * 0.0004) * 5;
+      rim.position.z = Math.sin(now * 0.0004) * 5;
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+
+    function renderFilters(facets) {
+      const root = el("filters");
+      const allOn = facets.every((f) => state.activeFacets.has(f.id));
+      root.innerHTML = [
+        `<button type="button" data-all="1" class="${allOn ? "on" : ""}">Todas</button>`,
+        ...facets.map((f) =>
+          `<button type="button" data-facet="${esc(f.id)}" class="${state.activeFacets.has(f.id) ? "on" : ""}" title="${esc(f.hint)}">${esc(f.label)}</button>`
+        ),
+      ].join("");
+    }
+
+    async function loadService(name) {
+      state.service = name;
+      const graph = await api(`/api/graph/${encodeURIComponent(name)}`);
+      buildGraph(graph);
+      renderFilters(graph.facets || []);
+      const viewLabel = graph.view === "system" ? "vista sistema" : `servicio ${graph.service?.name || name}`;
+      el("hint").textContent =
+        `${graph.nodes.length} nodos · ${viewLabel} · izq=orbitar · rueda=zoom · click-rueda=panear`;
+      renderIntro(graph.intro);
+      controls.target.set(0, 0.5, 0);
+      camera.position.set(8.5, 5.5, 10.5);
+      if (el("serviceSelect").value !== name) {
+        el("serviceSelect").value = name;
+      }
+      addBubble("Noc152", graph.intro?.what_is_it || graph.service?.summary || "Mapa listo.");
+    }
+
+    function enterService(name) {
+      if (!name) return;
+      el("serviceSelect").value = name;
+      loadService(name);
+    }
+
+    function addBubble(who, text) {
+      const div = document.createElement("div");
+      div.className = `bubble ${who === "vos" ? "user" : ""}`;
+      div.innerHTML = `<div class="who">${esc(who)}</div>${esc(text)}`;
+      el("thread").appendChild(div);
+      el("thread").scrollTop = el("thread").scrollHeight;
+    }
+
+    async function ask() {
+      const q = el("question").value.trim();
+      if (!q) return;
+      el("askBtn").disabled = true;
+      addBubble("vos", q);
+      el("question").value = "";
+      try {
+        el("askMode").textContent = "pensando…";
+        const data = await api("/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, service: state.service, use_llm: true }),
+        });
+        const mode = data.mode === "agent" ? `agente · ${data.model || "ollama"}` : "expediente local";
+        el("askMode").textContent = mode;
+        addBubble("Noc152", data.answer || "Sin respuesta");
+      } catch (err) {
+        el("askMode").textContent = "error";
+        addBubble("Noc152", `No pude responder: ${err.message}`);
+      } finally {
+        el("askBtn").disabled = false;
+      }
+    }
+
+    async function openEvidence(id) {
+      const data = await api(`/api/evidence/${encodeURIComponent(id)}`);
+      el("dlgTitle").textContent = "Evidencia en el repo";
+      el("dlgRef").textContent = data.ref || data.path;
+      el("dlgExcerpt").textContent = data.excerpt || "";
+      el("evidenceDialog").showModal();
+    }
+
+    document.addEventListener("click", (e) => {
+      const ev = e.target.closest("[data-eid]");
+      if (ev) openEvidence(ev.getAttribute("data-eid")).catch((err) => addBubble("Noc152", err.message));
+
+      const openBtn = e.target.closest("[data-open-service]");
+      if (openBtn) {
+        enterService(openBtn.getAttribute("data-open-service"));
+        return;
+      }
+
+      const sug = e.target.closest("[data-q]");
+      if (sug) {
+        el("question").value = sug.getAttribute("data-q");
+        ask();
+      }
+
+      const facetBtn = e.target.closest("#filters [data-facet]");
+      if (facetBtn) {
+        const f = facetBtn.getAttribute("data-facet");
+        if (state.activeFacets.has(f) && state.activeFacets.size > 1) state.activeFacets.delete(f);
+        else state.activeFacets.add(f);
+        renderFilters(state.graph?.facets || []);
+        applyVisibility();
+      }
+      const allBtn = e.target.closest("#filters [data-all]");
+      if (allBtn) {
+        state.activeFacets = new Set(["identity", "topology", "runtime", "signals", "failure"]);
+        renderFilters(state.graph?.facets || []);
+        applyVisibility();
+      }
+    });
+
+    el("serviceSelect").addEventListener("change", (e) => loadService(e.target.value));
+    el("askBtn").addEventListener("click", ask);
+    el("btnReset").addEventListener("click", () => {
+      controls.target.set(0, 0.5, 0);
+      camera.position.set(8.5, 5.5, 10.5);
+    });
+    el("btnExpand").addEventListener("click", () => {
+      if (state.selectedId) focusNode(state.selectedId, true);
+    });
+    el("btnTrace").addEventListener("click", startTrace);
+    el("btnIntro").addEventListener("click", () => renderIntro(state.graph?.intro));
+    el("dlgClose").addEventListener("click", () => el("evidenceDialog").close());
+    el("question").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        ask();
+      }
+    });
+
+    (async function boot() {
+      try {
+        const meta = await api("/api/meta");
+        const opts = [];
+        if (meta.has_system_view) {
+          opts.push(`<option value="__system__">Sistema (todos los microservicios)</option>`);
+        }
+        for (const s of meta.services || []) {
+          opts.push(`<option value="${esc(s.name)}">${esc(s.name)}</option>`);
+        }
+        el("serviceSelect").innerHTML = opts.join("");
+        if (meta.has_system_view) await loadService("__system__");
+        else if (meta.services?.[0]?.name) await loadService(meta.services[0].name);
+        else el("detailBody").innerHTML = `<p class="empty">Sin servicios. Corré ingest primero.</p>`;
+      } catch (err) {
+        el("detailBody").innerHTML = `<p class="empty">No pude cargar Noc152: ${esc(err.message)}</p>`;
+      }
+    })();
+  </script>
+</body>
+</html>
