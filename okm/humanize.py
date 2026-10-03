@@ -157,6 +157,13 @@ _SERVICE_BLURBS: dict[str, str] = {
         "HTTPX no es una app que corre sola: es una biblioteca Python (cliente HTTP) "
         "que otros programas usan para llamar APIs."
     ),
+    "okm": (
+        "OKM / Noc152: el motor que estás usando. Lee un repo, arma un expediente "
+        "(servicios, claims, evidencia) y lo muestra en un mapa 3D con preguntas."
+    ),
+    "proyecto-noc-152": (
+        "Este mismo proyecto: Operational Knowledge Motor + briefing Noc152."
+    ),
 }
 
 _NOISE_SERVICES = {"helm-chart", "src", "microservices-demo"}
