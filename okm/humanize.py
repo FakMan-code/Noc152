@@ -21,31 +21,40 @@ KIND_ES = {
 
 FACET_ES = {
     "identity": {
-        "label": "Identidad",
-        "hint": "Qué es y para qué sirve",
-        "guide": "Acá está el nombre, el propósito y cómo se presenta el proyecto.",
+        "label": "Info",
+        "hint": "Qué es",
+        "guide": "Nombre, propósito y presentación del servicio.",
     },
     "topology": {
-        "label": "Conexiones",
-        "hint": "De qué depende y a qué toca",
+        "label": "Enlaces",
+        "hint": "Dependencias",
         "guide": "Paquetes, imports y relaciones con otras piezas.",
     },
     "runtime": {
-        "label": "Cómo corre",
-        "hint": "Puertos, contenedores, entorno",
-        "guide": "Señales de ejecución: Docker, puertos, variables de entorno.",
+        "label": "Run",
+        "hint": "Ejecución",
+        "guide": "Contenedores, puertos y entorno.",
     },
     "signals": {
-        "label": "Señales",
-        "hint": "Monitoreo, logs, alertas",
-        "guide": "Qué miraría un NOC para saber si está sano. En repos puros suele faltar.",
+        "label": "Ops",
+        "hint": "Observabilidad",
+        "guide": "Monitoreo, logs y alertas (suele faltar en repo-only).",
     },
     "failure": {
-        "label": "Cuando falla",
-        "hint": "Incidentes y recuperación",
-        "guide": "Runbooks, errores conocidos, caminos de recuperación. También suele faltar en repo-only.",
+        "label": "Riesgo",
+        "hint": "Incidentes",
+        "guide": "Fallos, runbooks y recuperación (suele faltar en repo-only).",
     },
 }
+
+
+def facet_filter_label(facet_id: str) -> str:
+    """Short chip label from config, with FACET_ES fallback."""
+    cfg = load_config().get("ui", {}) or {}
+    filters = cfg.get("facet_filters") or {}
+    if facet_id in filters and str(filters[facet_id]).strip():
+        return str(filters[facet_id]).strip()
+    return FACET_ES.get(facet_id, {}).get("label", facet_id)
 
 GAP_REASON_ES = {
     "source_not_in_scope": "esta demo solo lee el repositorio; esa info viviría en ops/monitoreo",
@@ -175,85 +184,31 @@ def human_summary(service: Service) -> str:
 
 def system_intro(*, source_uri: str | None, service_names: list[str]) -> dict[str, Any]:
     title = source_display_name(source_uri)
-    names = ", ".join(service_names[:8])
-    more = f" y {len(service_names) - 8} más" if len(service_names) > 8 else ""
     multi = len(service_names) > 1
     return {
-        "title": "Mapa del sistema",
+        "title": title,
         "body": (
-            f"Noc152 leyó «{title}» ({source_uri or 'ruta local'}) y armó este mapa. "
+            f"Mapa de {title}: "
             + (
-                "Cada nodo es un servicio detectado por manifiestos; click para entrar a su expediente."
+                f"{len(service_names)} servicios. Click un nodo para entrar."
                 if multi
-                else "Por ahora hay un servicio principal; abrilo para ver áreas, hallazgos y evidencia."
+                else "click un nodo para ver detalle."
             )
         ),
-        "what_is_it": (
-            f"{'Sistema con varios servicios' if multi else 'Servicio detectado'}: {names}{more}."
-        ),
-        "node_legend": [
-            {
-                "kind": "service",
-                "label": "Violeta — hub del sistema",
-                "text": "Nodo principal del mapa (identidad del source), no un estado de salud.",
-            },
-            {
-                "kind": "facet",
-                "label": "Azul — área",
-                "text": "Solo aparece cuando entrás a un servicio concreto.",
-            },
-            {
-                "kind": "dependency",
-                "label": "Celeste — dependencia",
-                "text": "Paquetes/libs que ese servicio declara.",
-            },
-            {
-                "kind": "claim",
-                "label": "Gris — hallazgo",
-                "text": "Algo concreto del expediente, con evidencia si hay.",
-            },
-        ],
-        "tips": [
-            "Empezá por el hub violeta o por el servicio que te interese.",
-            "Usá el selector «Sistema» para volver al mapa completo.",
-            "Preguntá en español: el agente solo usa el expediente.",
-        ],
+        "what_is_it": "",
+        "node_legend": [],
+        "tips": [],
     }
 
 
 def brief_intro(service: Service, *, source_uri: str | None = None) -> dict[str, Any]:
-    what = human_summary(service)
-    src = source_uri or "repositorio local"
+    _ = source_uri  # no exponer rutas locales en el panel
     return {
-        "title": f"Servicio: {service.name}",
-        "body": (
-            f"Entraste al expediente de «{service.name}» dentro de {src}. "
-            "El centro es este servicio; alrededor están áreas de conocimiento "
-            "y hallazgos con evidencia del código."
-        ),
-        "what_is_it": what,
-        "node_legend": [
-            {
-                "kind": "facet",
-                "label": "Azul — área",
-                "text": "Una pregunta típica de NOC (qué es, de qué depende, cómo falla…).",
-            },
-            {
-                "kind": "dependency",
-                "label": "Celeste — dependencia",
-                "text": "Otro paquete o módulo que necesita para trabajar.",
-            },
-            {
-                "kind": "claim",
-                "label": "Gris — hallazgo",
-                "text": "Algo concreto que vimos o inferimos, con link a archivo si hay.",
-            },
-        ],
-        "tips": [
-            "Click en un nodo para leer en español qué significa.",
-            "Volvé a «Sistema» en el selector para ver todos los servicios.",
-            "«Traza» anima el camino desde el servicio hacia afuera.",
-        ],
+        "title": service.name,
+        "body": "Click un nodo para ver detalle.",
+        "what_is_it": "",
+        "node_legend": [],
+        "tips": [],
     }
 
 

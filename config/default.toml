@@ -4,6 +4,14 @@
 [ui]
 product_name = "Noc152"
 
+# Chips de filtro del mapa (cortos / genéricos)
+[ui.facet_filters]
+identity = "Info"
+topology = "Enlaces"
+runtime = "Run"
+signals = "Ops"
+failure = "Riesgo"
+
 # Dimensiones de alcance (UI). Por ahora vacías; se llenan cuando haya datos.
 [[ui.scopes]]
 id = "pais"

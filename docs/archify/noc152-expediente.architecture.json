@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Noc152 — expediente (motor Archify)",
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "viewBox": [980, 560],
+    "views": [
+      {
+        "id": "hub-facets",
+        "label": "Hub y facetas",
+        "focus": ["svc-noc152", "facet-info", "facet-enlaces", "facet-run", "facet-ops", "facet-riesgo"],
+        "note": "El servicio Noc152 se abre en cinco áreas de conocimiento."
+      },
+      {
+        "id": "identity-path",
+        "label": "Info",
+        "focus": ["svc-noc152", "facet-info", "claim-name", "claim-purpose"],
+        "note": "Nombre y propósito observados en el repo."
+      },
+      {
+        "id": "ops-gaps",
+        "label": "Huecos ops",
+        "focus": ["svc-noc152", "facet-run", "facet-ops", "facet-riesgo", "gap-runtime", "gap-signals", "gap-failure"],
+        "note": "Run / Ops / Riesgo todavía sin señales en el repo (gaps)."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "svc-noc152",
+      "type": "backend",
+      "label": "Noc152",
+      "sublabel": "servicio hub",
+      "pos": [56, 180],
+      "size": [132, 60],
+      "tag": "expediente"
+    },
+    {
+      "id": "facet-info",
+      "type": "cloud",
+      "label": "Info",
+      "sublabel": "identidad",
+      "pos": [300, 28],
+      "size": [112, 44]
+    },
+    {
+      "id": "facet-enlaces",
+      "type": "cloud",
+      "label": "Enlaces",
+      "sublabel": "topología",
+      "pos": [300, 108],
+      "size": [112, 44]
+    },
+    {
+      "id": "facet-run",
+      "type": "cloud",
+      "label": "Run",
+      "sublabel": "runtime",
+      "pos": [300, 188],
+      "size": [112, 44]
+    },
+    {
+      "id": "facet-ops",
+      "type": "cloud",
+      "label": "Ops",
+      "sublabel": "señales",
+      "pos": [300, 268],
+      "size": [112, 44]
+    },
+    {
+      "id": "facet-riesgo",
+      "type": "cloud",
+      "label": "Riesgo",
+      "sublabel": "falla",
+      "pos": [300, 348],
+      "size": [112, 44]
+    },
+    {
+      "id": "claim-name",
+      "type": "frontend",
+      "label": "Noc152",
+      "sublabel": "nombre (visto)",
+      "pos": [540, 12],
+      "size": [128, 40]
+    },
+    {
+      "id": "claim-purpose",
+      "type": "frontend",
+      "label": "Expediente",
+      "sublabel": "propósito (visto)",
+      "pos": [540, 60],
+      "size": [128, 40]
+    },
+    {
+      "id": "dep-numpy",
+      "type": "external",
+      "label": "numpy",
+      "sublabel": "dependencia",
+      "pos": [540, 108],
+      "size": [128, 40]
+    },
+    {
+      "id": "gap-runtime",
+      "type": "security",
+      "label": "runtime",
+      "sublabel": "hueco",
+      "pos": [540, 188],
+      "size": [128, 44],
+      "tag": "gap"
+    },
+    {
+      "id": "gap-signals",
+      "type": "security",
+      "label": "signals",
+      "sublabel": "hueco",
+      "pos": [540, 268],
+      "size": [128, 44],
+      "tag": "gap"
+    },
+    {
+      "id": "gap-failure",
+      "type": "security",
+      "label": "failure",
+      "sublabel": "hueco",
+      "pos": [540, 348],
+      "size": [128, 44],
+      "tag": "gap"
+    }
+  ],
+  "connections": [
+    { "id": "hub-info", "from": "svc-noc152", "to": "facet-info", "variant": "emphasis" },
+    { "id": "hub-enlaces", "from": "svc-noc152", "to": "facet-enlaces" },
+    { "id": "hub-run", "from": "svc-noc152", "to": "facet-run" },
+    { "id": "hub-ops", "from": "svc-noc152", "to": "facet-ops" },
+    { "id": "hub-riesgo", "from": "svc-noc152", "to": "facet-riesgo" },
+    { "id": "info-name", "from": "facet-info", "to": "claim-name" },
+    { "id": "info-purpose", "from": "facet-info", "to": "claim-purpose" },
+    { "id": "enlaces-numpy", "from": "facet-enlaces", "to": "dep-numpy", "label": "depende" },
+    { "id": "run-gap", "from": "facet-run", "to": "gap-runtime", "label": "sin señales", "variant": "dashed" },
+    { "id": "ops-gap", "from": "facet-ops", "to": "gap-signals", "label": "sin señales", "variant": "dashed" },
+    { "id": "riesgo-gap", "from": "facet-riesgo", "to": "gap-failure", "label": "sin señales", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Fuente",
+      "items": [
+        "Mismos nodos que el grafo 3D de Noc152",
+        "Render Archify: HTML/SVG 2D explorables"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Visto en repo",
+      "items": [
+        "Info: nombre y propósito",
+        "Enlaces: dependencia numpy"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Huecos",
+      "items": [
+        "Run / Ops / Riesgo sin evidencia de repo",
+        "Ahí entra la ficha de monitoreo NOC"
+      ]
+    }
+  ]
+}

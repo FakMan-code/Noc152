@@ -13,10 +13,11 @@ from typing import Any
 
 import numpy as np
 
-from okm.health import NODE_COLOR, health_legend, node_color_for_claim, service_health
+from okm.health import NODE_COLOR, node_color_for_claim, service_health
 from okm.humanize import (
     FACET_ES,
     brief_intro,
+    facet_filter_label,
     facet_label,
     human_claim,
     human_summary,
@@ -28,7 +29,13 @@ from okm.humanize import (
 from okm.models import Claim, EpistemicKind, Facet, Service
 from okm.store import ExpedienteStore
 
-_NOISY = {"imports_module", "references_url"}
+# No van como esferas de claim: imports son ruido; packages ya salen como nodos dep:*
+_NOISY = {
+    "imports_module",
+    "references_url",
+    "depends_on_package",
+    "requires_package",
+}
 
 
 def _clip_label(text: str, n: int = 26) -> str:
@@ -93,12 +100,6 @@ def _claim_detail(store: ExpedienteStore, claim: Claim) -> dict[str, Any]:
         "sections": sections,
         "facet": claim.facet.value,
     }
-
-
-def _with_health_legend(intro: dict[str, Any]) -> dict[str, Any]:
-    intro = dict(intro)
-    intro["node_legend"] = health_legend() + list(intro.get("node_legend") or [])
-    return intro
 
 
 def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
@@ -212,11 +213,11 @@ def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
         "engine": "numpy-force-3d",
         "locale": "es",
         "view": "system",
-        "intro": _with_health_legend(system_intro(source_uri=source_uri, service_names=names)),
+        "intro": system_intro(source_uri=source_uri, service_names=names),
         "service": {
             "id": "system",
             "name": "__system__",
-            "summary": "Mapa de todos los microservicios del repo.",
+            "summary": "Mapa de servicios.",
         },
         "nodes": nodes,
         "edges": edges,
@@ -230,8 +231,7 @@ def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
             "pan": "click-rueda",
             "select": "click en nodo",
             "expand": "doble click o Ampliar",
-            "trace": "botón Traza",
-            "filter": "chips de área (en vista servicio)",
+            "filter": "filtros (vista servicio)",
         },
     }
 
@@ -278,24 +278,7 @@ def build_scene_graph(store: ExpedienteStore, service: Service) -> dict[str, Any
             )
             or service.name,
         },
-        "sections": [
-            {
-                "title": "Cómo leer los colores",
-                "items": [
-                    {
-                        "statement": item["label"] + " — " + item["text"],
-                        "kind": (
-                            "failing"
-                            if item["kind"] == "failing"
-                            else "observed"
-                            if item["kind"] == "ok"
-                            else "inferred"
-                        ),
-                    }
-                    for item in health_legend()
-                ],
-            }
-        ],
+        "sections": [],
         "facet": None,
     }
 
@@ -461,7 +444,7 @@ def build_scene_graph(store: ExpedienteStore, service: Service) -> dict[str, Any
         "engine": "numpy-force-3d",
         "locale": "es",
         "view": "service",
-        "intro": _with_health_legend(brief_intro(service, source_uri=source_uri)),
+        "intro": brief_intro(service, source_uri=source_uri),
         "service": {
             "id": service.service_id,
             "name": service.name,
@@ -475,20 +458,34 @@ def build_scene_graph(store: ExpedienteStore, service: Service) -> dict[str, Any
         "details": details,
         "coverage": coverage,
         "facets": [
-            {"id": f.value, "label": FACET_ES[f.value]["label"], "hint": FACET_ES[f.value]["hint"]}
+            {
+                "id": f.value,
+                "label": facet_filter_label(f.value),
+                "hint": FACET_ES[f.value]["hint"],
+            }
             for f in Facet
         ],
         "trace_paths": trace_paths[:24],
         "controls": {
             "orbit": "arrastrar",
             "zoom": "rueda",
-            "pan": "click derecho",
+            "pan": "click-rueda",
             "select": "click en nodo",
             "expand": "doble click o Ampliar",
-            "trace": "botón Traza",
-            "filter": "chips de área",
+            "filter": "filtros",
         },
     }
+
+
+def apply_positions(
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    *,
+    seed: int = 152,
+) -> None:
+    positions = layout_force_3d(nodes, edges, seed=seed)
+    for node, xyz in zip(nodes, positions):
+        node["x"], node["y"], node["z"] = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
 
 
 def layout_force_3d(

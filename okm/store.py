@@ -309,15 +309,11 @@ class ExpedienteStore:
         ).fetchone()
         if not r:
             return None
-        return Evidence(
-            evidence_id=r["evidence_id"],
-            source_id=r["source_id"],
-            path=r["path"],
-            blob_sha=r["blob_sha"],
-            locator=Locator.from_json(json.loads(r["locator_json"])),
-            excerpt=r["excerpt"],
-            retrieved_at=r["retrieved_at"],
-        )
+        return self._row_to_evidence(r)
+
+    def list_evidence(self) -> list[Evidence]:
+        rows = self._conn.execute("SELECT * FROM evidence").fetchall()
+        return [self._row_to_evidence(r) for r in rows]
 
     def latest_run(self) -> dict[str, Any] | None:
         r = self._conn.execute(
@@ -333,6 +329,18 @@ class ExpedienteStore:
         for c in claims:
             by_facet[c.facet.value][c.kind.value] += 1
         return by_facet
+
+    @staticmethod
+    def _row_to_evidence(r: sqlite3.Row) -> Evidence:
+        return Evidence(
+            evidence_id=r["evidence_id"],
+            source_id=r["source_id"],
+            path=r["path"],
+            blob_sha=r["blob_sha"],
+            locator=Locator.from_json(json.loads(r["locator_json"])),
+            excerpt=r["excerpt"],
+            retrieved_at=r["retrieved_at"],
+        )
 
     @staticmethod
     def _row_to_claim(r: sqlite3.Row) -> Claim:

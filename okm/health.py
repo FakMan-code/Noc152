@@ -1,12 +1,13 @@
-"""Operational health colors for Noc152 nodes.
+"""Operational health colors for Noc152 / Archify 3D nodes.
 
-Semántica:
-  verde  (#4ade80) — ok
-  amarillo (#fbbf24) — alerta a revisar (no crítica) — solo con señal ops real
-  rojo   (#ef4444) — algo roto — solo con evidencia de falla real
+Semántica de nodos (contrato UI):
+  violeta (#8b5cf6) — principal (hub del mapa)
+  verde   (#4ade80) — ok
+  amarillo (#fbbf24) — alerta a revisar (no crítica)
+  rojo    (#ef4444) — problema / falla real
 
-Hoy el expediente es repo-only (no productivo): sin alertas ni fallas anexadas
-todo se pinta ok. El amarillo/rojo quedan listos para cuando enlacemos monitoreo.
+Hoy, sin alertas conectadas: principal = violeta, el resto = verde.
+Amarillo y rojo se activan cuando enlacemos monitoreo/ops.
 """
 
 from __future__ import annotations
@@ -17,9 +18,10 @@ from typing import Any, Literal
 from okm.models import Claim, EpistemicKind, Facet, Service
 from okm.store import ExpedienteStore
 
-Health = Literal["ok", "alert", "failing"]
+Health = Literal["principal", "ok", "alert", "failing"]
 
 HEALTH_COLOR: dict[str, str] = {
+    "principal": "#8b5cf6",
     "ok": "#4ade80",
     "alert": "#fbbf24",
     "degraded": "#fbbf24",
@@ -27,8 +29,18 @@ HEALTH_COLOR: dict[str, str] = {
     "unknown": "#4ade80",
 }
 
+HEALTH_LABEL_ES = {
+    "principal": "principal",
+    "ok": "ok",
+    "alert": "alerta",
+    "degraded": "alerta",
+    "failing": "problema",
+}
+
 NODE_COLOR = {
-    "hub": "#8b5cf6",  # violeta — nodo principal del sistema
+    "hub": "#8b5cf6",  # violeta — nodo principal
+    "principal": "#8b5cf6",
+    "ok": "#4ade80",
     "facet": "#88a4bf",
     "dependency": "#38bdf8",
     "claim": "#d4d4d4",
@@ -52,13 +64,6 @@ _FAIL_RE = re.compile(
     r"\b(fail|failed|failure|error|exception|panic|outage|crash|sever[eo]|down|timeout)\b",
     re.IGNORECASE,
 )
-
-HEALTH_LABEL_ES = {
-    "ok": "ok",
-    "alert": "alerta",
-    "degraded": "alerta",
-    "failing": "roto",
-}
 
 
 def _from_ops(claim: Claim) -> bool:
@@ -147,18 +152,31 @@ def human_fail_reason(claim: Claim) -> str:
 def health_legend() -> list[dict[str, str]]:
     return [
         {
-            "kind": "ok",
-            "label": "Verde — ok",
-            "text": "Sin alertas ni fallas. En demo repo-only, esto es lo normal.",
+            "kind": "principal",
+            "label": "Violeta — principal",
+            "text": "Nodo hub del mapa (identidad central del sistema).",
         },
         {
-            "kind": "degraded",
+            "kind": "ok",
+            "label": "Verde — ok",
+            "text": "Sin alertas ni fallas. Hoy es el default hasta conectar monitoreo.",
+        },
+        {
+            "kind": "alert",
             "label": "Amarillo — alerta",
-            "text": "Para cuando anexemos monitoreo: algo a revisar, no crítico.",
+            "text": "A futuro: alerta ops a revisar, no crítica.",
         },
         {
             "kind": "failing",
-            "label": "Rojo — roto",
-            "text": "Reservado para fallas reales de ops/producción.",
+            "label": "Rojo — problema",
+            "text": "A futuro: falla real de ops/producción.",
         },
     ]
+
+
+def status_color(status: str) -> str:
+    return HEALTH_COLOR.get(status, HEALTH_COLOR["ok"])
+
+
+def status_label(status: str) -> str:
+    return HEALTH_LABEL_ES.get(status, status)

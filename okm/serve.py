@@ -12,9 +12,10 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from okm.agent import agent_answer
 from okm.ask import brief_for_ui, export_payload
+from okm.archify_adapter import find_archify_spec
 from okm.config import load_config
+from okm.engines import GraphEngine, build_graph, parse_engine
 from okm.humanize import is_noise_service, product_name
-from okm.layout3d import build_scene_graph, build_system_graph
 from okm.store import ExpedienteStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -56,6 +57,20 @@ class BriefingApp:
                     if not is_noise_service(s.name)
                 ],
                 "has_system_view": sum(1 for s in services if not is_noise_service(s.name)) > 1,
+                "archify_spec": (
+                    str(find_archify_spec(self.workspace).relative_to(self.workspace))
+                    if find_archify_spec(self.workspace)
+                    else None
+                ),
+                "engines": (
+                    [{"id": GraphEngine.ARCHIFY.value, "label": "Archify"}]
+                    if find_archify_spec(self.workspace)
+                    else [
+                        {"id": GraphEngine.ARCHIFY.value, "label": "Archify"},
+                        {"id": GraphEngine.COMBINED.value, "label": "Combinado"},
+                        {"id": GraphEngine.NOC152.value, "label": "Noc152"},
+                    ]
+                ),
             }
         finally:
             store.close()
@@ -210,17 +225,44 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     status, body, ctype = _json_bytes({"ok": False, "error": "missing service"}, 400)
                     self._send(status, body, ctype)
                     return
+                default_engine = (
+                    GraphEngine.ARCHIFY.value
+                    if find_archify_spec(app.workspace)
+                    else GraphEngine.ARCHIFY.value
+                )
+                engine = parse_engine((qs.get("engine") or [default_engine])[0])
                 store = app.open_store()
                 try:
-                    if name in {"__system__", "system", "_system"}:
-                        payload = build_system_graph(store)
+                    # Archify IR is service-agnostic: same full graph for any name.
+                    if find_archify_spec(app.workspace) and engine == GraphEngine.ARCHIFY:
+                        payload = build_graph(
+                            store,
+                            service=None,
+                            engine=engine,
+                            system=True,
+                            workspace=app.workspace,
+                        )
+                    elif name in {"__system__", "system", "_system"}:
+                        payload = build_graph(
+                            store,
+                            service=None,
+                            engine=engine,
+                            system=True,
+                            workspace=app.workspace,
+                        )
                     else:
                         svc = store.get_service(name)
                         if not svc:
                             status, body, ctype = _json_bytes({"ok": False, "error": "not found"}, 404)
                             self._send(status, body, ctype)
                             return
-                        payload = build_scene_graph(store, svc)
+                        payload = build_graph(
+                            store,
+                            service=svc,
+                            engine=engine,
+                            system=False,
+                            workspace=app.workspace,
+                        )
                 finally:
                     store.close()
                 status, body, ctype = _json_bytes(payload)
@@ -238,6 +280,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
             data = self._read_json()
             question = str(data.get("question") or "")
             service = data.get("service")
+            focus_node = data.get("focus_node") or data.get("node") or data.get("selected")
             use_llm = data.get("use_llm", True)
             store = app.open_store()
             try:
@@ -245,6 +288,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     store,
                     question,
                     service_name=str(service) if service else None,
+                    focus_node=str(focus_node) if focus_node else None,
                     use_llm=bool(use_llm),
                 )
             finally:
