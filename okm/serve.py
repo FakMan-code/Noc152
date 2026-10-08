@@ -10,11 +10,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from okm import __version__
 from okm.agent import agent_answer
 from okm.ask import brief_for_ui, export_payload
 from okm.archify_adapter import find_archify_spec
 from okm.config import load_config
-from okm.engines import GraphEngine, build_graph, parse_engine
+from okm.engines import GraphEngine, available_engines, build_graph, parse_engine
+from okm.openapi_graph import find_openapi_spec
 from okm.humanize import is_noise_service, product_name
 from okm.store import ExpedienteStore
 
@@ -39,6 +41,8 @@ class BriefingApp:
             scopes = ui.get("scopes") or [{"id": "pais", "label": "País", "options": []}]
             return {
                 "product_name": product_name(),
+                "version": __version__,
+                "default_engine": GraphEngine.COMBINED.value,
                 "workspace": str(self.workspace),
                 "source_uri": run.get("source_uri"),
                 "run_id": run.get("run_id"),
@@ -62,15 +66,12 @@ class BriefingApp:
                     if find_archify_spec(self.workspace)
                     else None
                 ),
-                "engines": (
-                    [{"id": GraphEngine.ARCHIFY.value, "label": "Archify"}]
-                    if find_archify_spec(self.workspace)
-                    else [
-                        {"id": GraphEngine.ARCHIFY.value, "label": "Archify"},
-                        {"id": GraphEngine.COMBINED.value, "label": "Combinado"},
-                        {"id": GraphEngine.NOC152.value, "label": "Noc152"},
-                    ]
+                "openapi_spec": (
+                    str(find_openapi_spec(self.workspace))
+                    if find_openapi_spec(self.workspace)
+                    else None
                 ),
+                "engines": available_engines(self.workspace),
             }
         finally:
             store.close()
@@ -225,16 +226,13 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     status, body, ctype = _json_bytes({"ok": False, "error": "missing service"}, 400)
                     self._send(status, body, ctype)
                     return
-                default_engine = (
-                    GraphEngine.ARCHIFY.value
-                    if find_archify_spec(app.workspace)
-                    else GraphEngine.ARCHIFY.value
-                )
-                engine = parse_engine((qs.get("engine") or [default_engine])[0])
+                engine = parse_engine((qs.get("engine") or [GraphEngine.COMBINED.value])[0])
                 store = app.open_store()
                 try:
-                    # Archify IR is service-agnostic: same full graph for any name.
-                    if find_archify_spec(app.workspace) and engine == GraphEngine.ARCHIFY:
+                    # Archify IR / OpenAPI: service-agnostic full graph.
+                    if engine == GraphEngine.OPENAPI or (
+                        find_archify_spec(app.workspace) and engine == GraphEngine.ARCHIFY
+                    ):
                         payload = build_graph(
                             store,
                             service=None,
@@ -242,7 +240,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                             system=True,
                             workspace=app.workspace,
                         )
-                    elif name in {"__system__", "system", "_system"}:
+                    elif name in {"__system__", "system", "_system", "__archify__", "__openapi__"}:
                         payload = build_graph(
                             store,
                             service=None,

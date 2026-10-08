@@ -135,12 +135,12 @@ def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
     details[hub_id] = {
         "title": system_name,
         "kind": "service",
-        "kind_label": "sistema",
-        "subtitle": "Hub del source ingerido",
+        "kind_label": "mapa completo",
+        "subtitle": "Todos los servicios del repo",
         "summary": (
-            f"Mapa de servicios detectados en «{system_name}». "
-            "Cada nodo alrededor es un servicio real del repo. "
-            "Click en uno para ver su expediente completo."
+            f"Vista general de «{system_name}»: "
+            "cada nodo es un servicio. "
+            "Click en uno para abrir su expediente."
         ),
         "meta": {
             "fuente": source_uri or "local",
@@ -217,7 +217,7 @@ def build_system_graph(store: ExpedienteStore) -> dict[str, Any]:
         "service": {
             "id": "system",
             "name": "__system__",
-            "summary": "Mapa de servicios.",
+            "summary": "Mapa completo: todos los servicios juntos.",
         },
         "nodes": nodes,
         "edges": edges,

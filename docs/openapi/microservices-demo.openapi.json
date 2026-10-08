@@ -1,0 +1,385 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Online Boutique API",
+    "version": "1.0.0",
+    "description": "Superficie HTTP/gRPC-gateway del demo microservices-demo, modelada como OpenAPI para comparar el grafo de contrato con Archify/Noc152."
+  },
+  "servers": [
+    { "url": "http://frontend:8080", "description": "frontend" },
+    { "url": "http://checkoutservice:5050", "description": "checkoutservice" }
+  ],
+  "tags": [
+    { "name": "frontend", "description": "UI / BFF" },
+    { "name": "productcatalogservice", "description": "Catálogo de productos" },
+    { "name": "cartservice", "description": "Carrito" },
+    { "name": "currencyservice", "description": "Conversión de moneda" },
+    { "name": "paymentservice", "description": "Pagos" },
+    { "name": "shippingservice", "description": "Envíos" },
+    { "name": "emailservice", "description": "Confirmación por email" },
+    { "name": "checkoutservice", "description": "Orquestación de compra" },
+    { "name": "recommendationservice", "description": "Recomendaciones" },
+    { "name": "adservice", "description": "Anuncios" }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["frontend"],
+        "operationId": "home",
+        "summary": "Home de la tienda",
+        "responses": { "200": { "description": "HTML" } }
+      }
+    },
+    "/product/{id}": {
+      "get": {
+        "tags": ["frontend", "productcatalogservice"],
+        "operationId": "getProductPage",
+        "summary": "Página de producto",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Producto",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Product" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cart": {
+      "get": {
+        "tags": ["frontend", "cartservice"],
+        "operationId": "getCart",
+        "summary": "Ver carrito",
+        "responses": {
+          "200": {
+            "description": "Carrito",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Cart" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["frontend", "cartservice"],
+        "operationId": "addToCart",
+        "summary": "Agregar al carrito",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CartItem" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/cart/checkout": {
+      "post": {
+        "tags": ["frontend", "checkoutservice"],
+        "operationId": "placeOrder",
+        "summary": "Checkout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PlaceOrderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Orden",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OrderResult" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products": {
+      "get": {
+        "tags": ["productcatalogservice"],
+        "operationId": "listProducts",
+        "summary": "Listar productos",
+        "responses": {
+          "200": {
+            "description": "Lista",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Product" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/{id}": {
+      "get": {
+        "tags": ["productcatalogservice"],
+        "operationId": "getProduct",
+        "summary": "Detalle de producto",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Producto",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Product" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/{userId}": {
+      "get": {
+        "tags": ["cartservice"],
+        "operationId": "getUserCart",
+        "summary": "Carrito por usuario",
+        "parameters": [
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cart",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Cart" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/currency/convert": {
+      "post": {
+        "tags": ["currencyservice"],
+        "operationId": "convertCurrency",
+        "summary": "Convertir moneda",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Money" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Money",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Money" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment": {
+      "post": {
+        "tags": ["paymentservice"],
+        "operationId": "charge",
+        "summary": "Cobrar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChargeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChargeResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipping/quote": {
+      "post": {
+        "tags": ["shippingservice"],
+        "operationId": "getQuote",
+        "summary": "Cotizar envío",
+        "responses": {
+          "200": {
+            "description": "Quote",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Money" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipping/ship": {
+      "post": {
+        "tags": ["shippingservice"],
+        "operationId": "shipOrder",
+        "summary": "Despachar",
+        "responses": {
+          "200": {
+            "description": "Tracking",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ShippingTracking" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/email/confirmation": {
+      "post": {
+        "tags": ["emailservice"],
+        "operationId": "sendOrderConfirmation",
+        "summary": "Email de confirmación",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OrderResult" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sent" } }
+      }
+    },
+    "/api/recommendations": {
+      "get": {
+        "tags": ["recommendationservice"],
+        "operationId": "listRecommendations",
+        "summary": "Recomendaciones",
+        "responses": {
+          "200": {
+            "description": "Products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Product" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ads": {
+      "get": {
+        "tags": ["adservice"],
+        "operationId": "getAds",
+        "summary": "Anuncios contextuales",
+        "responses": {
+          "200": {
+            "description": "Ads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Ad" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "priceUsd": { "$ref": "#/components/schemas/Money" }
+        }
+      },
+      "Cart": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CartItem" }
+          }
+        }
+      },
+      "CartItem": {
+        "type": "object",
+        "properties": {
+          "productId": { "type": "string" },
+          "quantity": { "type": "integer" }
+        }
+      },
+      "Money": {
+        "type": "object",
+        "properties": {
+          "currencyCode": { "type": "string" },
+          "units": { "type": "integer" },
+          "nanos": { "type": "integer" }
+        }
+      },
+      "PlaceOrderRequest": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string" },
+          "address": { "type": "object" },
+          "creditCard": { "$ref": "#/components/schemas/ChargeRequest" }
+        }
+      },
+      "OrderResult": {
+        "type": "object",
+        "properties": {
+          "orderId": { "type": "string" },
+          "shippingTrackingId": { "type": "string" },
+          "shippingCost": { "$ref": "#/components/schemas/Money" }
+        }
+      },
+      "ChargeRequest": {
+        "type": "object",
+        "properties": {
+          "amount": { "$ref": "#/components/schemas/Money" },
+          "creditCardNumber": { "type": "string" }
+        }
+      },
+      "ChargeResponse": {
+        "type": "object",
+        "properties": {
+          "transactionId": { "type": "string" }
+        }
+      },
+      "ShippingTracking": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }
+        }
+      },
+      "Ad": {
+        "type": "object",
+        "properties": {
+          "redirectUrl": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      }
+    }
+  }
+}

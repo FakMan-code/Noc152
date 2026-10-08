@@ -1,13 +1,14 @@
 """Operational health colors for Noc152 / Archify 3D nodes.
 
-Semántica de nodos (contrato UI):
+Semáforo de problemas (solo nodos, no aristas/tráfico):
   violeta (#8b5cf6) — principal (hub del mapa)
-  verde   (#4ade80) — ok
-  amarillo (#fbbf24) — alerta a revisar (no crítica)
-  rojo    (#ef4444) — problema / falla real
+  neutro  (#9aa8b8) — sin señal ops (default del mapa)
+  verde   (#4ade80) — ok confirmado por ops
+  amarillo (#fbbf24) — alerta a revisar
+  rojo    (#ef4444) — problema / falla
 
-Hoy, sin alertas conectadas: principal = violeta, el resto = verde.
-Amarillo y rojo se activan cuando enlacemos monitoreo/ops.
+Verde / amarillo / rojo se reservan al semáforo. El tráfico de aristas
+usa otros colores (cyan / lavanda).
 """
 
 from __future__ import annotations
@@ -22,24 +23,28 @@ Health = Literal["principal", "ok", "alert", "failing"]
 
 HEALTH_COLOR: dict[str, str] = {
     "principal": "#8b5cf6",
+    "neutral": "#9aa8b8",
     "ok": "#4ade80",
     "alert": "#fbbf24",
     "degraded": "#fbbf24",
     "failing": "#ef4444",
-    "unknown": "#4ade80",
+    "unknown": "#9aa8b8",
 }
 
 HEALTH_LABEL_ES = {
     "principal": "principal",
+    "neutral": "sin señal",
     "ok": "ok",
     "alert": "alerta",
     "degraded": "alerta",
     "failing": "problema",
+    "unknown": "sin señal",
 }
 
 NODE_COLOR = {
     "hub": "#8b5cf6",  # violeta — nodo principal
     "principal": "#8b5cf6",
+    "neutral": "#9aa8b8",
     "ok": "#4ade80",
     "facet": "#88a4bf",
     "dependency": "#38bdf8",
@@ -111,6 +116,14 @@ def node_color_for_claim(claim: Claim) -> tuple[str, str]:
     return "claim", NODE_COLOR["claim"]
 
 
+def _has_ops_signal(claims: list[Claim]) -> bool:
+    for c in claims:
+        prod = (c.producer or "").lower()
+        if prod.startswith("ops") or prod in {"datadog", "prometheus", "cloudwatch", "pagerduty"}:
+            return True
+    return False
+
+
 def service_health(store: ExpedienteStore, service: Service) -> dict[str, Any]:
     claims = store.claims_for(service.service_id)
 
@@ -132,13 +145,21 @@ def service_health(store: ExpedienteStore, service: Service) -> dict[str, Any]:
             "reason": "Hay una alerta ops a revisar (no crítica).",
         }
 
+    if _has_ops_signal(claims):
+        return {
+            "health": "ok",
+            "color": HEALTH_COLOR["ok"],
+            "label": HEALTH_LABEL_ES["ok"],
+            "reason": "Ops sin alertas ni fallas para este servicio.",
+        }
+
     return {
-        "health": "ok",
-        "color": HEALTH_COLOR["ok"],
-        "label": HEALTH_LABEL_ES["ok"],
+        "health": "neutral",
+        "color": HEALTH_COLOR["neutral"],
+        "label": HEALTH_LABEL_ES["neutral"],
         "reason": (
-            "Ok. Este mapa todavía lee solo el repo (no es productivo): "
-            "sin alertas/fallas anexadas, se muestra verde."
+            "Sin señal de monitoreo todavía: color neutro. "
+            "Verde/amarillo/rojo quedan para el semáforo cuando haya ops."
         ),
     }
 
@@ -154,28 +175,33 @@ def health_legend() -> list[dict[str, str]]:
         {
             "kind": "principal",
             "label": "Violeta — principal",
-            "text": "Nodo hub del mapa (identidad central del sistema).",
+            "text": "Nodo hub del mapa (centro de la vista).",
+        },
+        {
+            "kind": "neutral",
+            "label": "Gris — sin señal",
+            "text": "Default del mapa sin monitoreo conectado.",
         },
         {
             "kind": "ok",
             "label": "Verde — ok",
-            "text": "Sin alertas ni fallas. Hoy es el default hasta conectar monitoreo.",
+            "text": "Semáforo: ops confirma que está bien.",
         },
         {
             "kind": "alert",
             "label": "Amarillo — alerta",
-            "text": "A futuro: alerta ops a revisar, no crítica.",
+            "text": "Semáforo: alerta ops a revisar.",
         },
         {
             "kind": "failing",
             "label": "Rojo — problema",
-            "text": "A futuro: falla real de ops/producción.",
+            "text": "Semáforo: falla real de ops/producción.",
         },
     ]
 
 
 def status_color(status: str) -> str:
-    return HEALTH_COLOR.get(status, HEALTH_COLOR["ok"])
+    return HEALTH_COLOR.get(status, HEALTH_COLOR["neutral"])
 
 
 def status_label(status: str) -> str:

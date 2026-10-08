@@ -585,26 +585,26 @@ def build_archify_system(store: ExpedienteStore) -> dict[str, Any]:
     details[hub_id] = _detail(
         title=title,
         kind="service",
-        subtitle="sistema · Archify",
-        summary=f"{len(services)} servicios como componentes.",
+        subtitle="vista general · Archify",
+        summary=f"{len(services)} servicios como componentes. Click uno para abrir su expediente.",
         facet=None,
     )
 
     for svc in services:
         health = service_health(store, svc)
         nid = f"svc:{svc.service_id}"
-        nodes.append(
-            _node(
-                nid=nid,
-                label=svc.name,
-                kind="service",
-                color=health["color"],
-                layer=1,
-                size=1.05,
-                facet=None,
-                archify_type="backend",
-            )
+        svc_node = _node(
+            nid=nid,
+            label=svc.name,
+            kind="service",
+            color=health["color"],
+            layer=1,
+            size=1.05,
+            facet=None,
+            archify_type="backend",
         )
+        svc_node["service_name"] = svc.name
+        nodes.append(svc_node)
         details[nid] = _detail(
             title=svc.name,
             kind="service",
@@ -626,7 +626,7 @@ def build_archify_system(store: ExpedienteStore) -> dict[str, Any]:
             "node_legend": [],
             "tips": [],
         },
-        service={"id": "system", "name": "__system__", "summary": "Mapa de servicios."},
+        service={"id": "system", "name": "__system__", "summary": "Mapa completo: todos los servicios juntos."},
         nodes=nodes,
         edges=edges,
         details=details,

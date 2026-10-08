@@ -52,13 +52,17 @@
       font: inherit; color: var(--text); background: var(--panel-2);
       border: 1px solid var(--line); border-radius: 8px;
     }
-    select { padding: 0.4rem 0.55rem; min-width: 130px; }
+    select { padding: 0.4rem 0.55rem; min-width: 130px; max-width: min(280px, 36vw); }
     button { padding: 0.4rem 0.7rem; cursor: pointer; transition: border-color 140ms ease, background 140ms ease; }
     button:hover { border-color: #444; }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
     button.primary:hover { filter: brightness(1.05); }
     button:disabled { opacity: 0.45; cursor: wait; }
     button.active { border-color: var(--accent); color: #fff; background: var(--accent-dim); }
+    .crumbs {
+      font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
+      max-width: min(36ch, 28vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
 
     .filters {
       position: absolute; left: 1rem; top: 3.7rem;
@@ -73,9 +77,72 @@
       color: #fff; border-color: rgba(245,78,0,0.5); background: var(--accent-dim);
     }
     .edge-label {
-      font-family: var(--mono); font-size: 9px; color: #a3a3a3;
-      padding: 1px 5px; border: 1px solid #2a2a2a; border-radius: 6px;
-      background: rgba(12,12,12,0.78); white-space: nowrap; pointer-events: none;
+      font-family: var(--mono); font-size: 9px; color: #b0b0b0;
+      padding: 2px 6px; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+      background: rgba(10,12,14,0.82); white-space: nowrap; pointer-events: none;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Labels de grafo — patrón html-nodes (3d-force-graph): pill legible + tipo */
+    .g-label {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      transform: translateY(-18px); pointer-events: none; user-select: none;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
+    }
+    .g-label.is-hub { transform: translateY(-26px); }
+    .g-label.is-dim { opacity: 0.42; }
+    .g-label.is-hot .g-label__name {
+      border-color: rgba(245,78,0,0.65);
+      box-shadow: 0 0 0 1px rgba(245,78,0,0.25);
+    }
+    .g-label__name {
+      font-family: var(--font); font-size: 13px; font-weight: 600;
+      letter-spacing: -0.02em; color: #f7f7f8;
+      padding: 4px 10px; border-radius: 9px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: linear-gradient(180deg, rgba(22,26,30,0.94), rgba(12,14,16,0.9));
+      white-space: nowrap; line-height: 1.2;
+      max-width: 24ch; overflow: hidden; text-overflow: ellipsis;
+    }
+    .g-label.is-hub .g-label__name {
+      font-size: 15px; padding: 6px 12px; border-radius: 11px;
+    }
+    .shape-legend {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.75rem;
+      margin: 0.55rem 0 0.2rem; padding: 0.55rem 0.65rem;
+      border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    }
+    .shape-legend span {
+      font-size: 0.78rem; color: #d4d4d4; display: flex; align-items: center; gap: 0.4rem;
+    }
+    .shape-legend i {
+      width: 11px; height: 11px; flex: 0 0 auto;
+      border: 1.5px solid currentColor; opacity: 0.9;
+    }
+    .shape-legend i.sq { border-radius: 2px; }
+    .shape-legend i.ci { border-radius: 50%; }
+    .shape-legend i.di {
+      width: 9px; height: 9px; transform: rotate(45deg); border-radius: 1px;
+    }
+    .shape-legend i.hx {
+      width: 10px; height: 9px; border-radius: 2px;
+      clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+      background: currentColor; border: 0; opacity: 0.55;
+    }
+    .shape-legend i.to {
+      width: 12px; height: 8px; border-radius: 8px;
+    }
+    .g-label__kind {
+      font-family: var(--mono); font-size: 9px; font-weight: 500;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      color: #c8c8c8; padding: 1px 6px; border-radius: 999px;
+      background: rgba(20,22,24,0.9); border: 1px solid rgba(255,255,255,0.08);
+      white-space: nowrap;
+    }
+    .g-label__dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      margin-right: 5px; vertical-align: 1px;
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.25);
     }
 
     .hint {
@@ -167,6 +234,7 @@
     #btnBack:not(:disabled) {
       border-color: rgba(139, 92, 246, 0.45);
       color: #c4b5fd;
+      background: rgba(139, 92, 246, 0.12);
     }
 
     .ask-row { display: grid; gap: 0.4rem; }
@@ -178,14 +246,24 @@
       outline: 1px solid rgba(245, 78, 0, 0.55); outline-offset: 1px;
     }
     .thread {
-      display: grid; gap: 0.45rem; max-height: 150px; overflow: auto; margin-bottom: 0.5rem;
+      display: grid; gap: 0.45rem; max-height: 180px; overflow: auto; margin-bottom: 0.5rem;
     }
     .bubble {
       border: 1px solid var(--line); border-radius: 8px; padding: 0.45rem 0.55rem;
       font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap; background: #101010;
+      position: relative;
     }
     .bubble.user { border-color: rgba(245,78,0,0.35); background: var(--accent-dim); }
-    .bubble .who { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); margin-bottom: 0.15rem; }
+    .bubble .who {
+      font-family: var(--mono); font-size: 0.62rem; color: var(--muted); margin-bottom: 0.15rem;
+      display: flex; justify-content: space-between; align-items: center; gap: 0.4rem;
+    }
+    .bubble .expand-ans {
+      font: inherit; font-family: var(--mono); font-size: 0.62rem;
+      padding: 0.12rem 0.4rem; border-radius: 6px; cursor: pointer;
+      color: var(--accent); border: 1px solid rgba(245,78,0,0.35); background: transparent;
+    }
+    .bubble .expand-ans:hover { background: var(--accent-dim); }
     #scopeSelect:disabled {
       opacity: 0.72;
       cursor: not-allowed;
@@ -225,16 +303,17 @@
         <span class="tag">mapa · expediente</span>
       </div>
       <div class="top-actions">
-        <select id="serviceSelect" aria-label="Servicio"></select>
+        <select id="serviceSelect" aria-label="Qué mirás" title="Mapa completo = todos juntos. Después elegís un servicio."></select>
         <select id="engineSelect" aria-label="Motor de conocimiento">
           <option value="archify">Archify</option>
         </select>
         <select id="scopeSelect" aria-label="País" title="Alcance por país (próximamente)">
           <option value="">País</option>
         </select>
-        <button type="button" id="btnBack" disabled title="Sin vista anterior">Atrás</button>
+        <button type="button" id="btnBack" disabled title="Sin capa anterior">Atrás</button>
+        <span class="crumbs" id="crumbs" hidden></span>
         <button type="button" id="btnReset">Reset vista</button>
-        <button type="button" class="primary" id="btnExpand" disabled>Ampliar</button>
+        <button type="button" class="primary" id="btnExpand" disabled>Entrar</button>
       </div>
     </header>
 
@@ -297,15 +376,17 @@
       service: null,
       graph: null,
       selectedId: null,
-      engine: "archify",
+      engine: "combined",
       activeView: null,
       activeFacets: new Set(),
       nodeMeshes: new Map(),
       labelObjects: new Map(),
       edgeLines: [],
       edgeLabels: [],
+      edgeFlows: [],
       navHistory: [],
       navLock: false,
+      focusedId: null,
     };
 
     const el = (id) => document.getElementById(id);
@@ -322,10 +403,10 @@
 
     const stage = el("stage");
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0c0c0c);
-    scene.fog = new THREE.Fog(0x0c0c0c, 18, 42);
+    scene.background = new THREE.Color(0x0e1114);
+    scene.fog = new THREE.Fog(0x0e1114, 22, 48);
 
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
     camera.position.set(8.5, 5.5, 10.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -375,15 +456,18 @@
       if (e.button === 1) e.preventDefault();
     });
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    const key = new THREE.DirectionalLight(0xffffff, 0.85);
-    key.position.set(6, 10, 4);
+    scene.add(new THREE.AmbientLight(0xdde6ef, 0.72));
+    const key = new THREE.DirectionalLight(0xffffff, 0.95);
+    key.position.set(6, 12, 5);
     scene.add(key);
-    const rim = new THREE.PointLight(0xf54e00, 0.55, 40);
-    rim.position.set(-4, 3, -3);
+    const fill = new THREE.DirectionalLight(0x9eb6c9, 0.35);
+    fill.position.set(-8, 4, -6);
+    scene.add(fill);
+    const rim = new THREE.PointLight(0xf54e00, 0.35, 48);
+    rim.position.set(-4, 5, -3);
     scene.add(rim);
 
-    const grid = new THREE.GridHelper(40, 40, 0x2a2a2a, 0x1a1a1a);
+    const grid = new THREE.GridHelper(48, 48, 0x24303a, 0x171c22);
     grid.position.y = -3.2;
     scene.add(grid);
 
@@ -420,20 +504,217 @@
       state.labelObjects.clear();
       state.edgeLines = [];
       state.edgeLabels = [];
+      state.edgeFlows = [];
     }
 
-    function makeLabel(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      div.style.cssText = `
-        font-family: var(--mono); font-size: 10px; color: #cfcfcf;
-        padding: 2px 6px; border: 1px solid #2a2a2a; border-radius: 999px;
-        background: rgba(12,12,12,0.82); white-space: nowrap; transform: translateY(-14px);
-      `;
-      return new CSS2DObject(div);
+    const KIND_ES = {
+      product: "producto",
+      service: "servicio",
+      watch: "vigilar",
+      operation: "operación",
+      schema: "schema",
+      tag: "tag",
+      server: "server",
+      api: "api",
+      gap: "hueco",
+      dependency: "deps",
+      claim: "hallazgo",
+      facet: "área",
+      frontend: "frontend",
+      backend: "backend",
+      database: "db",
+      external: "externo",
+      cloud: "cloud",
+      security: "security",
+      messagebus: "bus",
+    };
+
+    function kindLabel(kind) {
+      if (!kind) return "";
+      return KIND_ES[kind] || String(kind);
+    }
+
+    function labelDotColor(node) {
+      if (state.engine === "combined" || state.graph?.engine === "combined") {
+        return "#" + storyDisplayColor(node).getHexString();
+      }
+      return node.color || "#9aa8b8";
+    }
+
+    function makeNodeLabel(node) {
+      const wrap = document.createElement("div");
+      const kind = node.kind || node.facet || "";
+      const hub = kind === "product" || kind === "api" || node.health === "principal";
+      wrap.className = "g-label" + (hub ? " is-hub" : "");
+      const swatch = labelDotColor(node);
+
+      // Sin chips repetitivos (vigilar/servicio). Solo nombre + punto de color.
+      // Kind textual solo en OpenAPI (operation/schema/tag/server).
+      const showKind = ["operation", "schema", "tag", "server", "api"].includes(kind);
+      if (showKind) {
+        const kindRow = document.createElement("div");
+        kindRow.className = "g-label__kind";
+        const dot = document.createElement("span");
+        dot.className = "g-label__dot";
+        dot.style.background = swatch;
+        kindRow.appendChild(dot);
+        kindRow.appendChild(document.createTextNode(kindLabel(kind)));
+        wrap.appendChild(kindRow);
+      }
+
+      const name = document.createElement("div");
+      name.className = "g-label__name";
+      const dot = document.createElement("span");
+      dot.className = "g-label__dot";
+      dot.style.background = swatch;
+      if (!showKind) name.appendChild(dot);
+      name.appendChild(document.createTextNode(node.label || node.id));
+      // Borde semáforo solo con ops real (alert/failing/ok confirmado)
+      if (node.health === "alert") {
+        name.style.borderColor = "rgba(251,191,36,0.55)";
+      } else if (node.health === "failing") {
+        name.style.borderColor = "rgba(239,68,68,0.55)";
+      } else if (node.health === "ok") {
+        name.style.borderColor = "rgba(74,222,128,0.45)";
+      }
+      wrap.appendChild(name);
+      return new CSS2DObject(wrap);
+    }
+
+    /** Forma legible por rol (Combinado) o por kind (otros motores). */
+    function nodeShapeKey(node) {
+      const role = String(node.role || node.label || "").toLowerCase();
+      const kind = node.kind || "";
+      if (kind === "product" || role === "producto") return "hub";
+      if (kind === "api") return "hub";
+      if (/\b(app web|tienda web|frontend|ui)\b/.test(role) || role === "ui") return "screen";
+      if (/\b(login|auth|autentic)\b/.test(role) || /auth/.test(String(node.service_name || ""))) return "key";
+      if (/\b(puerta api|gateway|dashboard|bff)\b/.test(role)) return "hex";
+      if (/\b(cuenta|accounts)\b/.test(role) || node.service_name === "accounts") return "core";
+      if (/\b(transfer|pago|payment|checkout)\b/.test(role)) return "ring";
+      if (/\b(pr[eé]stamo|loan|cart)\b/.test(role)) return "capsule";
+      if (/\b(cajero|atm|anuncio|ad)\b/.test(role)) return "block";
+      if (kind === "watch" || kind === "operation") return "key";
+      if (kind === "schema" || kind === "tag" || kind === "server") return "block";
+      if (kind === "gap" || kind === "security") return "spike";
+      if (kind === "dependency" || kind === "database") return "drum";
+      if (kind === "service") return "core";
+      return "core";
+    }
+
+    function nodeGeometry(node, radius) {
+      const r = radius;
+      switch (nodeShapeKey(node)) {
+        case "hub":
+          return new THREE.DodecahedronGeometry(r * 1.2, 0);
+        case "screen":
+          return new THREE.CylinderGeometry(r * 1.25, r * 1.25, r * 0.42, 28);
+        case "key":
+          return new THREE.OctahedronGeometry(r * 1.15, 0);
+        case "hex":
+          return new THREE.CylinderGeometry(r * 1.1, r * 1.1, r * 1.15, 6);
+        case "ring":
+          return new THREE.TorusGeometry(r * 0.85, r * 0.32, 14, 28);
+        case "capsule":
+          return new THREE.CapsuleGeometry(r * 0.72, r * 0.9, 6, 12);
+        case "block":
+          return new THREE.BoxGeometry(r * 1.45, r * 1.45, r * 1.45);
+        case "spike":
+          return new THREE.TetrahedronGeometry(r * 1.25, 0);
+        case "drum":
+          return new THREE.CylinderGeometry(r * 0.95, r * 0.95, r * 1.15, 22);
+        case "core":
+        default:
+          return new THREE.SphereGeometry(r, 36, 36);
+      }
+    }
+
+    function nodeMaterial(node, color) {
+      const shape = nodeShapeKey(node);
+      const hub = shape === "hub" || node.health === "principal";
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        metalness: hub ? 0.22 : shape === "ring" || shape === "hex" ? 0.18 : 0.06,
+        roughness: hub ? 0.28 : shape === "screen" ? 0.55 : 0.38,
+        emissive: color.clone(),
+        emissiveIntensity: hub ? 0.42 : node.criticality === "alta" ? 0.2 : 0.1,
+        flatShading: ["hub", "key", "hex", "block", "spike"].includes(shape),
+      });
+      return mat;
+    }
+
+    function addNodeHalo(mesh, node, radius, color) {
+      const shape = nodeShapeKey(node);
+      // Amarillo reservado al semáforo (alerta). Criticidad alta → anillo neutro.
+      const accent =
+        node.health === "alert" || node.health === "failing"
+          ? color
+          : node.criticality === "alta" && node.health !== "principal"
+            ? new THREE.Color(0xcbd5e1)
+            : color;
+      let halo;
+      if (shape === "hub" || shape === "core") {
+        halo = new THREE.Mesh(
+          new THREE.TorusGeometry(radius * 1.55, radius * 0.06, 10, 36),
+          new THREE.MeshBasicMaterial({
+            color: accent,
+            transparent: true,
+            opacity: 0.45,
+            depthWrite: false,
+          })
+        );
+        halo.rotation.x = Math.PI / 2;
+      } else {
+        halo = new THREE.Mesh(
+          new THREE.SphereGeometry(radius * 1.7, 20, 20),
+          new THREE.MeshBasicMaterial({
+            color: accent,
+            transparent: true,
+            opacity: 0.12,
+            depthWrite: false,
+          })
+        );
+      }
+      halo.userData.isHalo = true;
+      mesh.add(halo);
+    }
+
+    function renderShapeLegend(engine) {
+      if (engine !== "combined") return "";
+      return `<div class="shape-legend" aria-label="Leyenda de formas">
+        <span><i class="di" style="color:#8b5cf6"></i> Producto</span>
+        <span><i class="to" style="color:#9aa8b8"></i> App / pantalla</span>
+        <span><i class="di" style="color:#9aa8b8"></i> Login</span>
+        <span><i class="hx" style="color:#9aa8b8"></i> Puerta API</span>
+        <span><i class="ci" style="color:#9aa8b8"></i> Cuentas</span>
+        <span><i class="to" style="color:#9aa8b8"></i> Transferencias</span>
+      </div>
+      <p class="body-text" style="color:var(--muted);font-size:0.8rem;margin:0.45rem 0 0">
+        Aristas: 1 punta = un sentido · 2 puntas = ida/vuelta.
+        Semáforo (verde/amarillo/rojo) solo con monitoreo real.
+      </p>`;
+    }
+
+    function childIds(id) {
+      const out = [];
+      for (const e of state.graph?.edges || []) {
+        if (e.source === id && e.target !== id) out.push(e.target);
+      }
+      return [...new Set(out)];
+    }
+
+    function layerIdsFor(id) {
+      return new Set([id, ...childIds(id)]);
+    }
+
+    function graphTitle() {
+      return state.graph?.intro?.title || state.graph?.service?.name || "Mapa";
     }
 
     function nodeVisible(n) {
+      if (state.focusedId) {
+        if (!layerIdsFor(state.focusedId).has(n.id)) return false;
+      }
       if (state.activeView) {
         const focus = new Set(state.activeView.focus || []);
         if (focus.size && !focus.has(n.id)) return false;
@@ -460,6 +741,74 @@
         line.visible = on;
         if (line.userData.edgeLabel) line.userData.edgeLabel.visible = on;
       }
+      for (const flow of state.edgeFlows) {
+        const on = visibleIds.has(flow.source) && visibleIds.has(flow.target);
+        for (const obj of flow.objects) obj.visible = on;
+      }
+    }
+
+    // Tráfico: nunca verde/amarillo/rojo (reservados al semáforo de nodos)
+    const FLOW_UNI = "#38bdf8";   // un sentido
+    const FLOW_BI = "#a78bfa";    // ida y vuelta (punta distinta en ambos extremos)
+    const FLOW_TREE = "#64748b";  // contains producto→servicio
+
+    function edgeFlowColor(kind, bidirectional) {
+      if (kind === "contains") return new THREE.Color(FLOW_TREE);
+      if (bidirectional) return new THREE.Color(FLOW_BI);
+      return new THREE.Color(FLOW_UNI);
+    }
+
+    /** Punta de flecha. t cerca de 1 = cerca del destino. */
+    function makeEdgeArrow(from, to, color, t = 0.9) {
+      const dir = to.clone().sub(from);
+      if (dir.lengthSq() < 1e-8) return null;
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(0.075, 0.2, 10),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.96,
+          depthWrite: false,
+        })
+      );
+      cone.position.copy(from).lerp(to, t);
+      cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      cone.userData.isFlow = true;
+      return cone;
+    }
+
+    /** Punta bidireccional: dos conos (en A y en B). */
+    function makeBiTips(from, to, color) {
+      const tips = [];
+      const a = makeEdgeArrow(from, to, color, 0.9);
+      const b = makeEdgeArrow(to, from, color, 0.9);
+      if (a) tips.push(a);
+      if (b) tips.push(b);
+      return tips;
+    }
+
+    function makeEdgeParticle(color, scale = 0.048) {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(scale, 8, 8),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+        })
+      );
+      mesh.userData.isFlow = true;
+      return mesh;
+    }
+
+    /** Color de nodo en Combinado: semáforo solo si hay ops; si no, neutro/violeta. */
+    function storyDisplayColor(node) {
+      const h = node.health;
+      if (h === "failing") return new THREE.Color("#ef4444");
+      if (h === "alert") return new THREE.Color("#fbbf24");
+      if (h === "ok") return new THREE.Color("#4ade80");
+      if (node.kind === "product" || h === "principal") return new THREE.Color("#8b5cf6");
+      return new THREE.Color("#9aa8b8");
     }
 
     function makeEdgeLabel(text) {
@@ -475,23 +824,84 @@
       state.edgeLabels = [];
       const idToPos = new Map(graph.nodes.map((n) => [n.id, new THREE.Vector3(n.x, n.y, n.z)]));
 
+      const directed = new Set(
+        (graph.edges || []).map((e) => `${e.source}\0${e.target}`)
+      );
+      const pairDone = new Set();
+
       for (const e of graph.edges) {
         const a = idToPos.get(e.source);
         const b = idToPos.get(e.target);
         if (!a || !b) continue;
-        const color = e.color ? new THREE.Color(e.color) : new THREE.Color(0x3a3a3a);
+
+        const depends = e.kind === "depends" || e.kind === "dependency";
+        const contains = e.kind === "contains";
         const dashed = e.variant === "dashed";
+        const hasRev = directed.has(`${e.target}\0${e.source}`);
+        // Deps = ida/vuelta (una sola línea, dos puntas). Contains = un sentido.
+        const bidirectional = depends || (hasRev && !contains);
+        const pairKey = [e.source, e.target].sort().join("\0");
+        if (bidirectional) {
+          if (pairDone.has(pairKey)) continue;
+          pairDone.add(pairKey);
+        }
+
+        const flowColor = edgeFlowColor(e.kind, bidirectional);
+        const baseHex = `#${flowColor.getHexString()}`;
+        const opacity = dashed ? 0.4 : depends ? 0.7 : contains ? 0.32 : 0.55;
+
         const mat = new THREE.LineBasicMaterial({
-          color,
+          color: flowColor.clone(),
           transparent: true,
-          opacity: dashed ? 0.55 : 0.9,
+          opacity,
         });
         const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
         const line = new THREE.Line(geo, mat);
-        line.userData = { source: e.source, target: e.target, edgeLabel: null, label: e.label || "" };
+        line.userData = {
+          source: e.source,
+          target: e.target,
+          edgeLabel: null,
+          label: e.label || "",
+          baseColor: baseHex,
+          baseOpacity: opacity,
+          kind: e.kind || "",
+          bidirectional,
+        };
         graphRoot.add(line);
         state.edgeLines.push(line);
-        if (e.label) {
+
+        const tips = bidirectional
+          ? makeBiTips(a, b, flowColor)
+          : (() => {
+              const one = makeEdgeArrow(a, b, flowColor, 0.9);
+              return one ? [one] : [];
+            })();
+        for (const tip of tips) graphRoot.add(tip);
+
+        // Movimiento suave: 1 partícula (ping-pong si ida/vuelta)
+        const pMesh = makeEdgeParticle(flowColor, depends ? 0.05 : 0.04);
+        graphRoot.add(pMesh);
+        const particles = [{
+          mesh: pMesh,
+          from: a.clone(),
+          to: b.clone(),
+          pingPong: bidirectional,
+          phase: 0,
+        }];
+
+        state.edgeFlows.push({
+          source: e.source,
+          target: e.target,
+          bidirectional,
+          kind: e.kind || "",
+          speed: depends ? 0.00022 : contains ? 0.00012 : 0.00018,
+          particles,
+          arrows: tips,
+          line,
+          objects: [line, ...tips, pMesh],
+        });
+
+        if (e.label && (e.kind === "operation" || e.kind === "exposes")) {
           const mid = a.clone().lerp(b, 0.5);
           const elab = makeEdgeLabel(e.label);
           elab.position.copy(mid);
@@ -501,24 +911,38 @@
         }
       }
 
+      const isCombined = graph.engine === "combined";
       for (const n of graph.nodes) {
-        const radius = 0.22 * (n.size || 1);
-        const geo = new THREE.SphereGeometry(radius, 28, 28);
-        const mat = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(n.color || "#e4e4e4"),
-          metalness: 0.15,
-          roughness: 0.35,
-          emissive: new THREE.Color(n.color || "#e4e4e4"),
-          emissiveIntensity: n.health === "principal" ? 0.45 : 0.14,
-        });
+        const radius = 0.3 * (n.size || 1);
+        const color = isCombined
+          ? storyDisplayColor(n)
+          : new THREE.Color(n.color || "#9aa8b8");
+        const shape = nodeShapeKey(n);
+        const geo = nodeGeometry(n, radius);
+        const mat = nodeMaterial(n, color);
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.copy(idToPos.get(n.id));
+        // Disco "pantalla" de frente a la cámara aproximada
+        if (shape === "screen") mesh.rotation.x = Math.PI / 2;
+        if (shape === "hex") mesh.rotation.y = Math.PI / 12;
         mesh.userData.nodeId = n.id;
+        mesh.userData.kind = n.kind || "";
+        mesh.userData.shape = shape;
+        mesh.userData.baseEmissive = mat.emissiveIntensity;
+        mesh.userData.spin = shape === "hub";
         graphRoot.add(mesh);
+
+        // Halo solo hub/foco — no anillos por criticidad (parecían semáforo)
+        if (n.kind === "product" || n.health === "principal") {
+          addNodeHalo(mesh, n, radius, color);
+        }
+
         state.nodeMeshes.set(n.id, mesh);
 
-        const label = makeLabel(n.label);
+        const label = makeNodeLabel(n);
         label.position.copy(mesh.position);
+        // Labels un poco más arriba en formas altas
+        if (shape === "capsule" || shape === "hex") label.position.y += 0.12;
         graphRoot.add(label);
         state.labelObjects.set(n.id, label);
       }
@@ -529,15 +953,40 @@
     function setHighlight(id) {
       for (const [nid, mesh] of state.nodeMeshes) {
         const on = id != null && nid === id;
-        const health = state.graph.nodes.find((n) => n.id === nid)?.health;
-        mesh.material.emissiveIntensity = on ? 0.75 : (health === "principal" ? 0.45 : 0.14);
-        mesh.scale.setScalar(on ? 1.25 : 1);
+        const base = mesh.userData.baseEmissive ?? 0.1;
+        mesh.material.emissiveIntensity = on ? Math.max(0.7, base + 0.35) : base;
+        mesh.scale.setScalar(on ? 1.2 : 1);
+        const lab = state.labelObjects.get(nid);
+        if (lab?.element) {
+          lab.element.classList.toggle("is-hot", on);
+          lab.element.classList.toggle("is-dim", id != null && !on);
+        }
       }
-      // edge glow for neighbors
       for (const line of state.edgeLines) {
         const linked = id != null && (line.userData.source === id || line.userData.target === id);
-        line.material.color.set(linked ? 0xf54e00 : 0x3a3a3a);
-        line.material.opacity = linked ? 1 : 0.55;
+        if (linked) {
+          // Resalte neutro (plata): naranja/rojo quedan al semáforo y CTAs
+          line.material.color.set(0xe2e8f0);
+          line.material.opacity = 1;
+        } else {
+          line.material.color.set(line.userData.baseColor || "#4a5560");
+          line.material.opacity = id != null ? 0.18 : (line.userData.baseOpacity ?? 0.5);
+        }
+      }
+      for (const flow of state.edgeFlows) {
+        const linked = id != null && (flow.source === id || flow.target === id);
+        const hot = linked ? 0xe2e8f0 : null;
+        const base = flow.line.userData.baseColor || "#4a5560";
+        for (const p of flow.particles) {
+          if (hot) p.mesh.material.color.set(hot);
+          else p.mesh.material.color.set(base);
+          p.mesh.material.opacity = id != null && !linked ? 0.12 : 1;
+        }
+        for (const arrow of flow.arrows) {
+          if (hot) arrow.material.color.set(hot);
+          else arrow.material.color.set(base);
+          arrow.material.opacity = id != null && !linked ? 0.1 : 0.95;
+        }
       }
     }
 
@@ -550,20 +999,53 @@
       );
     }
 
+    function currentCrumbLabel() {
+      if (state.focusedId) return nodeLabel(state.focusedId);
+      return graphTitle();
+    }
+
     function updateNavChrome() {
       const btn = el("btnBack");
+      const crumbs = el("crumbs");
       if (!btn) return;
       const top = state.navHistory[state.navHistory.length - 1];
       if (!top) {
         btn.disabled = true;
         btn.textContent = "Atrás";
-        btn.title = "Sin vista anterior";
+        btn.title = "Sin capa anterior";
+      } else {
+        const label = top.label || nodeLabel(top.nodeId) || "capa anterior";
+        btn.disabled = false;
+        btn.textContent = `← ${label}`;
+        btn.title = `Volver a ${label} (Alt+←)`;
+      }
+      const trail = [...state.navHistory.map((h) => h.label).filter(Boolean), currentCrumbLabel()];
+      if (crumbs) {
+        const text = trail.join(" › ");
+        crumbs.textContent = text;
+        crumbs.hidden = trail.length < 2;
+        crumbs.title = text;
+      }
+      updateExpandChrome();
+    }
+
+    function updateExpandChrome() {
+      const btn = el("btnExpand");
+      if (!btn) return;
+      if (!state.selectedId) {
+        btn.disabled = true;
+        btn.textContent = "Entrar";
+        btn.title = "Seleccioná un nodo para entrar a su capa";
         return;
       }
-      const label = top.label || nodeLabel(top.nodeId);
       btn.disabled = false;
-      btn.textContent = `← ${label}`;
-      btn.title = `Volver a ${label}`;
+      if (nodeIsDrillable(state.selectedId) && state.focusedId !== state.selectedId) {
+        btn.textContent = "Entrar";
+        btn.title = "Entrar a la siguiente capa de este nodo";
+      } else {
+        btn.textContent = "Ampliar";
+        btn.title = "Acercar la cámara a este nodo";
+      }
     }
 
     function clearNavHistory() {
@@ -573,8 +1055,11 @@
 
     function snapshotNav() {
       return {
+        service: state.service,
+        engine: state.engine,
         nodeId: state.selectedId,
-        label: nodeLabel(state.selectedId),
+        focusedId: state.focusedId,
+        label: currentCrumbLabel(),
         camera: camera.position.clone(),
         target: controls.target.clone(),
       };
@@ -586,9 +1071,9 @@
       const top = state.navHistory[state.navHistory.length - 1];
       if (
         top &&
-        top.nodeId === snap.nodeId &&
-        top.camera.distanceToSquared(snap.camera) < 0.04 &&
-        top.target.distanceToSquared(snap.target) < 0.04
+        top.service === snap.service &&
+        top.focusedId === snap.focusedId &&
+        top.nodeId === snap.nodeId
       ) {
         return;
       }
@@ -597,39 +1082,135 @@
       updateNavChrome();
     }
 
-    function goBack() {
-      const prev = state.navHistory.pop();
-      if (!prev) {
-        updateNavChrome();
-        return;
-      }
-      state.navLock = true;
-      camera.position.copy(prev.camera);
-      controls.target.copy(prev.target);
+    function restoreCamera(snap) {
+      if (!snap?.camera || !snap?.target) return;
+      camera.position.copy(snap.camera);
+      controls.target.copy(snap.target);
       controls.update();
+    }
+
+    function applyRestoredFrame(prev) {
+      state.focusedId = prev.focusedId ?? null;
+      applyVisibility();
+      restoreCamera(prev);
       if (prev.nodeId && state.nodeMeshes.has(prev.nodeId)) {
         selectNode(prev.nodeId);
         el("hint").textContent = `Volviste a ${prev.label || nodeLabel(prev.nodeId)}`;
       } else {
         state.selectedId = null;
         setHighlight(null);
-        el("btnExpand").disabled = true;
         renderIntro(state.graph?.intro);
-        el("hint").textContent = "Volviste a la vista anterior";
+        el("hint").textContent = "Volviste a la capa anterior";
+        updateExpandChrome();
       }
-      state.navLock = false;
+    }
+
+    async function goBack() {
+      const prev = state.navHistory.pop();
+      if (!prev) {
+        updateNavChrome();
+        return;
+      }
+      state.navLock = true;
+      try {
+        if (prev.service && prev.service !== state.service) {
+          await loadService(prev.service, { keepHistory: true, restore: prev });
+          el("hint").textContent = `Volviste a ${prev.label || graphTitle()}`;
+        } else {
+          applyRestoredFrame(prev);
+        }
+      } finally {
+        state.navLock = false;
+        updateNavChrome();
+      }
+    }
+
+    function frameIds(ids) {
+      const pts = ids
+        .map((id) => state.nodeMeshes.get(id)?.position)
+        .filter(Boolean);
+      if (!pts.length) return;
+      const box = new THREE.Box3();
+      pts.forEach((p) => box.expandByPoint(p));
+      const center = box.getCenter(new THREE.Vector3());
+      const size = Math.max(box.getSize(new THREE.Vector3()).length(), 2.4);
+      controls.target.copy(center);
+      camera.position.copy(center.clone().add(new THREE.Vector3(size * 0.75, size * 0.48, size * 0.75)));
+      controls.update();
+    }
+
+    function drillTarget(id) {
+      const node = state.graph?.nodes?.find((n) => n.id === id);
+      const detail = state.graph?.details?.[id];
+      const svc = node?.service_name || node?.open_service || detail?.open_service || null;
+      const kids = childIds(id);
+      return { node, detail, svc, kids };
+    }
+
+    function canEnterServiceGraph(svc) {
+      if (!svc || svc === state.service) return false;
+      if (state.graph?.view === "archify" && state.graph?.archify) return false;
+      return state.graph?.view === "system";
+    }
+
+    function nodeIsDrillable(id) {
+      if (!id || !state.graph) return false;
+      const { svc, kids } = drillTarget(id);
+      if (canEnterServiceGraph(svc)) return true;
+      if (!kids.length) return false;
+      if (state.focusedId === id) return false;
+      const nextSize = kids.length + 1;
+      if (!state.focusedId && nextSize >= (state.graph.nodes || []).length) return false;
+      return true;
+    }
+
+    function zoomToNode(id) {
+      const mesh = state.nodeMeshes.get(id);
+      if (!mesh) return;
+      const target = mesh.position.clone();
+      controls.target.copy(target);
+      camera.position.copy(target.clone().add(new THREE.Vector3(2.8, 1.6, 2.8)));
+      controls.update();
+    }
+
+    function enterNodeLayer(id) {
+      if (!id || !state.graph) return;
+      const { svc, kids } = drillTarget(id);
+
+      if (canEnterServiceGraph(svc)) {
+        enterService(svc);
+        return;
+      }
+
+      if (!nodeIsDrillable(id)) {
+        selectNode(id);
+        if (state.focusedId === id) {
+          el("hint").textContent = `Capa: ${nodeLabel(id)} · ${kids.length} nodos`;
+        } else {
+          el("hint").textContent = `Última capa · ${nodeLabel(id)}`;
+        }
+        return;
+      }
+
+      pushNav();
+      state.focusedId = id;
+      applyVisibility();
+      frameIds([id, ...kids]);
+      selectNode(id);
+      el("hint").textContent = `Capa: ${nodeLabel(id)} · ${kids.length} nodo${kids.length === 1 ? "" : "s"} · Atrás para volver`;
       updateNavChrome();
     }
 
     function focusNode(id, expand = false) {
-      const mesh = state.nodeMeshes.get(id);
-      if (!mesh) return;
+      if (!id) return;
+      if (expand && nodeIsDrillable(id)) {
+        enterNodeLayer(id);
+        return;
+      }
       if (expand || (state.selectedId && state.selectedId !== id)) {
         pushNav();
       }
-      const target = mesh.position.clone();
-      controls.target.lerp(target, expand ? 1 : 0.65);
-      if (expand) camera.position.copy(target.clone().add(new THREE.Vector3(2.8, 1.6, 2.8)));
+      zoomToNode(id);
       selectNode(id);
     }
 
@@ -648,6 +1229,8 @@
       if (!rows?.length) return "";
       const colorFor = {
         principal: "#8b5cf6",
+        neutral: "#9aa8b8",
+        unknown: "#9aa8b8",
         ok: "#4ade80",
         alert: "#fbbf24",
         degraded: "#fbbf24",
@@ -668,6 +1251,7 @@
       el("detailTitle").textContent = intro.title || "Detalle";
       el("detailKind").textContent = state.graph?.engine || "";
       const body = (intro.body || "").trim();
+      const what = (intro.what_is_it || "").trim();
       const cards = renderArchifyCards(state.graph?.archify?.cards || []);
       const legend = renderHealthLegend(
         intro.node_legend || state.graph?.archify?.health_legend || []
@@ -679,11 +1263,15 @@
       const repoLine = repo?.url
         ? `<p class="body-text"><a class="link" href="${esc(repo.url)}" target="_blank" rel="noreferrer">${esc(repo.url)}</a>${repo.revision ? ` · <span class="chip">${esc(String(repo.revision).slice(0, 12))}</span>` : ""}</p>`
         : "";
+      const shapes = renderShapeLegend(state.graph?.engine);
+      const showLegend = state.graph?.engine !== "combined";
       el("detailBody").innerHTML = `
         ${body ? `<p class="body-text">${esc(body)}</p>` : ""}
+        ${what ? `<p class="body-text" style="color:var(--muted)">${esc(what)}</p>` : ""}
+        ${shapes}
         ${repoLine}
         ${bounds ? `<div class="chips">${bounds}</div>` : ""}
-        ${legend}
+        ${showLegend ? legend : ""}
         ${cards || ""}
       `;
     }
@@ -707,7 +1295,7 @@
     function selectNode(id) {
       state.selectedId = id;
       setHighlight(id);
-      el("btnExpand").disabled = !id;
+      updateExpandChrome();
       const detail = state.graph?.details?.[id];
       if (!detail) {
         el("detailTitle").textContent = "Nodo";
@@ -748,11 +1336,17 @@
       const openSvc = detail.open_service
         ? `<p style="margin:0 0 .7rem"><button type="button" class="primary" data-open-service="${esc(detail.open_service)}">Entrar a ${esc(detail.open_service)}</button></p>`
         : "";
+      const drillCue = nodeIsDrillable(id)
+        ? `<p class="empty">Siguiente capa disponible: click el nodo o usá Entrar.</p>`
+        : state.focusedId === id
+          ? `<p class="empty">Estás en esta capa. Click un hijo para seguir, o Atrás para volver.</p>`
+          : "";
       el("detailBody").innerHTML = `
         <h3 class="node-title">${esc(detail.title)}</h3>
         <p class="node-sub">${esc(detail.subtitle || "")}</p>
         <p class="body-text">${esc(detail.summary || "")}</p>
         ${openSvc}
+        ${drillCue}
         <div class="chips">${chips.join("")}</div>
         ${sections || "<p class='empty'>Sin más detalle desplegable.</p>"}
       `;
@@ -767,30 +1361,68 @@
       return raycaster.intersectObjects(meshes, false)[0]?.object?.userData?.nodeId || null;
     }
 
-    let lastClick = 0;
+    let pointerDown = null;
+    let lastDrillAt = 0;
+    let lastDrillId = null;
     renderer.domElement.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
-      const id = pick(e);
-      if (!id) return;
-      const now = performance.now();
-      const node = state.graph?.nodes?.find((n) => n.id === id);
-      if (now - lastClick < 280 && state.selectedId === id) {
-        if (node?.service_name && state.graph?.view === "system") {
-          enterService(node.service_name);
-        } else {
-          focusNode(id, true);
-        }
-      } else {
-        selectNode(id);
-      }
-      lastClick = now;
+      pointerDown = { x: e.clientX, y: e.clientY, id: pick(e) };
     });
+    renderer.domElement.addEventListener("pointerup", (e) => {
+      if (e.button !== 0 || !pointerDown) return;
+      const dx = e.clientX - pointerDown.x;
+      const dy = e.clientY - pointerDown.y;
+      const moved = dx * dx + dy * dy > 25;
+      const id = pointerDown.id;
+      pointerDown = null;
+      if (moved || !id) return;
+      const now = performance.now();
+      if (id === lastDrillId && now - lastDrillAt < 280) return;
+      lastDrillAt = now;
+      lastDrillId = id;
+      enterNodeLayer(id);
+    });
+
+    let lastLabelLod = 0;
+    const _tmp = new THREE.Vector3();
+    function updateLabelLod(now) {
+      if (now - lastLabelLod < 180) return;
+      lastLabelLod = now;
+      for (const [id, lab] of state.labelObjects) {
+        if (!lab.visible || !lab.element) continue;
+        const mesh = state.nodeMeshes.get(id);
+        if (!mesh) continue;
+        mesh.getWorldPosition(_tmp);
+        const dist = camera.position.distanceTo(_tmp);
+        const kindEl = lab.element.querySelector(".g-label__kind");
+        if (kindEl) kindEl.style.display = dist > 16 ? "none" : "";
+        lab.element.style.opacity = dist > 26 ? "0.35" : dist > 18 ? "0.7" : "1";
+      }
+    }
 
     function animate(now) {
       requestAnimationFrame(animate);
       controls.update();
       rim.position.x = Math.cos(now * 0.0004) * 5;
       rim.position.z = Math.sin(now * 0.0004) * 5;
+      // Giro lento solo en hub / anillo (presencia, no ruido)
+      for (const mesh of state.nodeMeshes.values()) {
+        if (!mesh.userData.spin || !mesh.visible) continue;
+        mesh.rotation.y += mesh.userData.shape === "ring" ? 0.008 : 0.003;
+      }
+      // Flujo suave: 1 partícula; bi = va y vuelve (ping-pong)
+      for (const flow of state.edgeFlows) {
+        if (!flow.line.visible) continue;
+        for (const p of flow.particles) {
+          let t = (now * flow.speed + p.phase) % 1;
+          if (p.pingPong) {
+            const cycle = (now * flow.speed + p.phase) % 2;
+            t = cycle < 1 ? cycle : 2 - cycle;
+          }
+          p.mesh.position.lerpVectors(p.from, p.to, t);
+        }
+      }
+      updateLabelLod(now);
       renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
     }
@@ -813,12 +1445,19 @@
       ].join("");
     }
 
-    async function loadService(name) {
+    async function loadService(name, opts = {}) {
+      const keepHistory = Boolean(opts.keepHistory);
+      const restore = opts.restore || null;
       state.service = name;
-      const engine = el("engineSelect")?.value || state.engine || "archify";
+      const engine = el("engineSelect")?.value || state.engine || "combined";
       state.engine = engine;
       state.activeView = null;
-      clearNavHistory();
+      if (!keepHistory) {
+        clearNavHistory();
+        state.focusedId = null;
+      } else if (!restore) {
+        state.focusedId = null;
+      }
       const graph = await api(`/api/graph/${encodeURIComponent(name)}?engine=${encodeURIComponent(engine)}`);
       const facetIds = (graph.facets || []).map((f) => f.id);
       state.activeFacets = new Set(facetIds);
@@ -828,22 +1467,30 @@
       const engineLabel = graph.engine || engine;
       const nEdges = graph.edges?.length || 0;
       const nCards = graph.archify?.cards?.length || 0;
-      el("hint").textContent =
-        `${graph.nodes.length} nodos · ${nEdges} aristas · ${nCards} cards · ${engineLabel}`;
-      renderIntro(graph.intro);
-      controls.target.set(0, 0.5, 0);
-      camera.position.set(8.5, 5.5, 10.5);
-      state.selectedId = null;
-      el("btnExpand").disabled = true;
+      if (restore) {
+        applyRestoredFrame(restore);
+      } else {
+        renderIntro(graph.intro);
+        controls.target.set(0, 0.5, 0);
+        camera.position.set(8.5, 5.5, 10.5);
+        state.selectedId = null;
+        setHighlight(null);
+        el("hint").textContent =
+          `${graph.nodes.length} nodos · ${nEdges} aristas · ${nCards} cards · ${engineLabel} · click un nodo para entrar`;
+        updateExpandChrome();
+      }
       if (el("serviceSelect").value !== name) {
         el("serviceSelect").value = name;
       }
+      updateNavChrome();
     }
 
     function enterService(name) {
       if (!name) return;
+      if (name === state.service) return;
       el("serviceSelect").value = name;
-      loadService(name);
+      pushNav();
+      loadService(name, { keepHistory: true });
     }
 
     function fmtMd(text) {
@@ -854,11 +1501,53 @@
         .replace(/\n/g, "<br>");
     }
 
+    function openAnswerTab(title, text) {
+      const html = `<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<title>${esc(title)}</title>
+<style>
+  body{margin:0;font-family:system-ui,sans-serif;background:#0e1114;color:#ededed;line-height:1.55}
+  main{max-width:44rem;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+  h1{font-size:1.15rem;margin:0 0 1rem;letter-spacing:-0.02em}
+  .meta{font-size:0.75rem;color:#8b8b8b;margin-bottom:1.25rem}
+  .body{font-size:0.95rem;white-space:pre-wrap}
+  .body strong{color:#fff}
+</style>
+</head><body><main>
+  <h1>${esc(title)}</h1>
+  <div class="meta">Noc152 · respuesta del asistente</div>
+  <div class="body">${fmtMd(text)}</div>
+</main></body></html>`;
+      const w = window.open("", "_blank");
+      if (!w) {
+        el("dlgTitle").textContent = title;
+        el("dlgRef").textContent = "Respuesta (popup bloqueado — usá este diálogo)";
+        el("dlgExcerpt").textContent = text;
+        el("evidenceDialog").showModal();
+        return;
+      }
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+    }
+
     function addBubble(who, text) {
       const div = document.createElement("div");
       div.className = `bubble ${who === "vos" ? "user" : ""}`;
       const body = who === "vos" ? esc(text) : fmtMd(text);
-      div.innerHTML = `<div class="who">${esc(who)}</div>${body}`;
+      const canExpand = who !== "vos" && String(text || "").trim().length > 0;
+      const whoRow = canExpand
+        ? `<div class="who"><span>${esc(who)}</span><button type="button" class="expand-ans" data-expand-answer="1">Ampliar</button></div>`
+        : `<div class="who">${esc(who)}</div>`;
+      div.innerHTML = `${whoRow}${body}`;
+      if (canExpand) {
+        div.dataset.answerText = text;
+        div.querySelector("[data-expand-answer]")?.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openAnswerTab("Respuesta del asistente", text);
+        });
+      }
       el("thread").appendChild(div);
       el("thread").scrollTop = el("thread").scrollHeight;
     }
@@ -949,19 +1638,24 @@
       if (state.service) loadService(state.service);
     });
     el("askBtn").addEventListener("click", ask);
-    el("btnBack").addEventListener("click", () => goBack());
+    el("btnBack").addEventListener("click", () => {
+      goBack();
+    });
     el("btnReset").addEventListener("click", () => {
-      clearNavHistory();
+      state.focusedId = null;
+      applyVisibility();
       controls.target.set(0, 0.5, 0);
       camera.position.set(8.5, 5.5, 10.5);
       state.selectedId = null;
       setHighlight(null);
-      el("btnExpand").disabled = true;
       renderIntro(state.graph?.intro);
-      el("hint").textContent = "Vista general";
+      el("hint").textContent = "Vista general de esta capa";
+      updateNavChrome();
     });
     el("btnExpand").addEventListener("click", () => {
-      if (state.selectedId) focusNode(state.selectedId, true);
+      if (!state.selectedId) return;
+      if (nodeIsDrillable(state.selectedId)) enterNodeLayer(state.selectedId);
+      else focusNode(state.selectedId, true);
     });
     window.addEventListener("keydown", (e) => {
       if (e.altKey && e.key === "ArrowLeft") {
@@ -1001,30 +1695,42 @@
     (async function boot() {
       try {
         const meta = await api("/api/meta");
-        document.title = meta.archify_spec
-          ? (meta.product_name || "Noc152") + " · Archify"
-          : (meta.product_name || "Noc152");
+        document.title = (meta.product_name || "Noc152") +
+          (meta.version ? ` · v${meta.version}` : "");
         renderScopes(meta.scopes);
         if (Array.isArray(meta.engines) && meta.engines.length) {
           el("engineSelect").innerHTML = meta.engines.map(
             (e) => `<option value="${esc(e.id)}">${esc(e.label)}</option>`
           ).join("");
-          el("engineSelect").value = meta.engines[0].id || "archify";
+          const preferred = meta.default_engine || "combined";
+          const ids = meta.engines.map((e) => e.id);
+          el("engineSelect").value = ids.includes(preferred) ? preferred : (ids[0] || "combined");
         }
-        const opts = [];
+        const services = meta.services || [];
+        const nSvc = services.length;
+        const overview = [];
         if (meta.archify_spec) {
-          opts.push(`<option value="__archify__">HTTPX (Archify)</option>`);
+          overview.push(`<option value="__archify__">Diagrama Archify</option>`);
         }
         if (meta.has_system_view) {
-          opts.push(`<option value="__system__">Sistema (todos los servicios)</option>`);
+          overview.push(
+            `<option value="__system__">Mapa completo · ${nSvc} servicio${nSvc === 1 ? "" : "s"}</option>`
+          );
         }
-        for (const s of meta.services || []) {
-          opts.push(`<option value="${esc(s.name)}">${esc(s.name)}</option>`);
+        const svcOpts = services
+          .map((s) => `<option value="${esc(s.name)}">${esc(s.name)}</option>`)
+          .join("");
+        const parts = [];
+        if (overview.length) {
+          parts.push(`<optgroup label="Vista general">${overview.join("")}</optgroup>`);
         }
-        el("serviceSelect").innerHTML = opts.join("");
+        if (svcOpts) {
+          parts.push(`<optgroup label="Un servicio">${svcOpts}</optgroup>`);
+        }
+        el("serviceSelect").innerHTML = parts.join("");
         if (meta.archify_spec) await loadService("__archify__");
         else if (meta.has_system_view) await loadService("__system__");
-        else if (meta.services?.[0]?.name) await loadService(meta.services[0].name);
+        else if (services[0]?.name) await loadService(services[0].name);
         else el("detailBody").innerHTML = `<p class="empty">Sin servicios. Corré ingest primero.</p>`;
       } catch (err) {
         el("detailBody").innerHTML = `<p class="empty">No pude cargar Noc152: ${esc(err.message)}</p>`;

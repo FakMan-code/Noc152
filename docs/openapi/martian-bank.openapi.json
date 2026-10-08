@@ -1,0 +1,163 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Martian Bank API",
+    "version": "1.0.0",
+    "description": "Superficie HTTP del demo cisco-open/martian-bank-demo (auth, ATM, accounts, transfers, loans)."
+  },
+  "servers": [
+    { "url": "http://localhost:8000", "description": "customer-auth" },
+    { "url": "http://localhost:8001", "description": "atm-locator" },
+    { "url": "http://127.0.0.1:5000", "description": "dashboard gateway" }
+  ],
+  "tags": [
+    { "name": "customer-auth", "description": "Registro y JWT" },
+    { "name": "atm-locator", "description": "Localización de ATMs" },
+    { "name": "accounts", "description": "Cuentas bancarias" },
+    { "name": "transactions", "description": "Transferencias" },
+    { "name": "loan", "description": "Préstamos" },
+    { "name": "dashboard", "description": "BFF / agregación" },
+    { "name": "ui", "description": "Frontend React" }
+  ],
+  "paths": {
+    "/api/users/": {
+      "post": {
+        "tags": ["customer-auth"],
+        "operationId": "registerUser",
+        "summary": "Registrar usuario",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/users/auth": {
+      "post": {
+        "tags": ["customer-auth"],
+        "operationId": "authenticateUser",
+        "summary": "Login / token JWT",
+        "responses": { "200": { "description": "Token" } }
+      }
+    },
+    "/api/users/logout": {
+      "post": {
+        "tags": ["customer-auth"],
+        "operationId": "logoutUser",
+        "summary": "Logout",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/users/profile": {
+      "post": {
+        "tags": ["customer-auth"],
+        "operationId": "getProfile",
+        "summary": "Perfil del usuario",
+        "responses": { "200": { "description": "Profile" } }
+      }
+    },
+    "/api/atm/": {
+      "post": {
+        "tags": ["atm-locator"],
+        "operationId": "listAtms",
+        "summary": "Listar ATMs",
+        "responses": { "200": { "description": "ATMs" } }
+      }
+    },
+    "/api/atm/{id}": {
+      "get": {
+        "tags": ["atm-locator"],
+        "operationId": "getAtm",
+        "summary": "ATM por id",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ATM" } }
+      }
+    },
+    "/account/": {
+      "get": {
+        "tags": ["accounts", "dashboard"],
+        "operationId": "getAccountDetails",
+        "summary": "Detalle de cuenta",
+        "responses": {
+          "200": {
+            "description": "Account",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Account" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["accounts", "dashboard"],
+        "operationId": "createAccount",
+        "summary": "Crear cuenta",
+        "responses": { "200": { "description": "Created" } }
+      }
+    },
+    "/transaction/": {
+      "post": {
+        "tags": ["transactions", "dashboard"],
+        "operationId": "transferFunds",
+        "summary": "Transferir fondos",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Transfer" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Transfer result" } }
+      }
+    },
+    "/loan/": {
+      "get": {
+        "tags": ["loan", "dashboard"],
+        "operationId": "listLoans",
+        "summary": "Listar préstamos",
+        "responses": { "200": { "description": "Loans" } }
+      },
+      "post": {
+        "tags": ["loan", "dashboard"],
+        "operationId": "applyLoan",
+        "summary": "Solicitar préstamo",
+        "responses": { "200": { "description": "Application" } }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": ["ui"],
+        "operationId": "uiHome",
+        "summary": "UI Martian Bank",
+        "responses": { "200": { "description": "HTML" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Account": {
+        "type": "object",
+        "properties": {
+          "account_number": { "type": "string" },
+          "name": { "type": "string" },
+          "balance": { "type": "number" },
+          "currency": { "type": "string" }
+        }
+      },
+      "Transfer": {
+        "type": "object",
+        "properties": {
+          "from_account": { "type": "string" },
+          "to_account": { "type": "string" },
+          "amount": { "type": "number" }
+        }
+      },
+      "Loan": {
+        "type": "object",
+        "properties": {
+          "amount": { "type": "number" },
+          "term_months": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

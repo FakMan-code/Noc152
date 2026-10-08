@@ -1,10 +1,12 @@
 # Noc152
 
-Repo: https://github.com/FakMan-code/Noc152
+**v0.2.0** · Repo: https://github.com/FakMan-code/Noc152
 
 Expediente operacional + mapa 3D consultable.
 
 Noc152 lee un repositorio (local o git público), detecta **servicios** por manifiestos, guarda claims con evidencia abríble y los muestra en un briefing interactivo. No asume productos ni organizaciones: la fuente la elegís vos.
+
+**Arranque del mapa:** motor **Combinado NOC** (roles humanos + deps). Detalle de motores: [`docs/engines.md`](docs/engines.md).
 
 ## Principios
 
@@ -54,21 +56,22 @@ python -m okm.cli serve --workspace .demo_self
 | Click izquierdo + arrastrar | Orbitar |
 | Rueda | Zoom |
 | Click-rueda + arrastrar | Panear |
-| Click en nodo | Detalle |
-| Doble click / Ampliar | Acercar (o entrar al servicio en vista sistema) |
-| Traza | Animar caminos |
+| Click en nodo | Entrar a la siguiente capa (hijos, o expediente del servicio) |
+| Entrar / Ampliar | Entrar a la capa, o acercar si ya es la última |
+| Atrás (Alt+←) | Capa anterior |
 | Preguntar | Agente local grounded en el expediente |
 
 ## Colores de salud
 
 | Color | Significado |
 |---|---|
-| Verde | Ok |
-| Amarillo | Alerta a revisar (cuando haya fuente ops) |
-| Rojo | Roto / fallando (reservado a evidencia ops) |
-| Violeta | Hub del sistema (nodo principal del mapa) |
+| Gris | Sin señal ops (default del mapa) |
+| Verde | Ok confirmado por ops (semáforo) |
+| Amarillo | Alerta a revisar (semáforo) |
+| Rojo | Problema / falla (semáforo) |
+| Violeta | Hub del sistema (nodo principal) |
 
-En modo solo-repo (sin monitoreo), los servicios se muestran en verde.
+Aristas: cyan + 1 punta = un sentido; lavanda + 2 puntas = ida/vuelta. Semáforo = solo nodos.
 
 ## Artefactos en `--workspace`
 
@@ -81,7 +84,7 @@ En modo solo-repo (sin monitoreo), los servicios se muestran en verde.
 ## API local (con `serve`)
 
 - `GET /api/meta`  
-- `GET /api/graph/__system__` — mapa de todos los servicios  
+- `GET /api/graph/__system__` — mapa completo (todos los servicios)  
 - `GET /api/graph/<servicio>` — expediente 3D de un servicio  
 - `POST /api/ask` — `{ "question": "...", "service": "<nombre>" }`  
 - `GET /api/evidence/<id>`  
@@ -96,6 +99,7 @@ python -m okm.cli open <evidence_id> [--workspace DIR]
 python -m okm.cli coverage <service> [--workspace DIR]
 python -m okm.cli export <service> [--workspace DIR]
 python -m okm.cli serve [--workspace DIR] [--host 127.0.0.1] [--port 8765]
+python -m okm.cli board [--workspace DIR] [--mode operator|showcase]
 ```
 
 ## Qué demuestra (y qué no)
@@ -104,7 +108,7 @@ python -m okm.cli serve [--workspace DIR] [--host 127.0.0.1] [--port 8765]
 
 - Ingesta genérica  
 - Expediente tipado con procedencia  
-- Mapa 3D + drill-down  
+- Mapa 3D + drill-down por capas  
 - Preguntas auditadas contra el expediente  
 
 **Todavía no**
@@ -113,8 +117,17 @@ python -m okm.cli serve [--workspace DIR] [--host 127.0.0.1] [--port 8765]
 - Autenticación / multi-usuario  
 - Multi-fuente completa más allá del repo  
 
+## Motores del mapa
+
+| Motor | Qué ves |
+|---|---|
+| **Combinado NOC** (default) | Historia de la app: roles + formas + deps |
+| Archify | IR de arquitectura curado |
+| Noc152 | Facetas / claims / gaps del expediente |
+| OpenAPI | Paths, ops y schemas (si hay spec) |
+
 ## Arquitectura en una frase
 
-`ingest` → expediente SQLite → `layout3d` (NumPy) + UI Three.js → `ask`/`agent` (retrieval + Ollama opcional).
+`ingest` → expediente SQLite → proyección 3D (Combinado / Archify / Noc152 / OpenAPI) → `ask`/`agent` (dossier + Ollama opcional).
 
-El grafo se inspira en la idea de diagramas explorables (tipo Archify: nodos, relaciones, detalle), pero el motor y los datos son propios de Noc152.
+El grafo se inspira en diagramas explorables, pero el cerebro y los datos son de Noc152 — no un segundo pipeline de chunking masivo.

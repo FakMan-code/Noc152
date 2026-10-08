@@ -11,6 +11,7 @@ from okm.ask import export_payload
 from okm.pipeline import build_expediente, format_service_card
 from okm.serve import run_server
 from okm.store import ExpedienteStore
+from okm.visual_state import board_text
 
 
 def _workspace(args: argparse.Namespace) -> Path:
@@ -101,6 +102,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_board(args: argparse.Namespace) -> int:
+    """ASCII ops board from the NumPy state engine (no live metrics required)."""
+    store = ExpedienteStore(_workspace(args))
+    print(board_text(store, mode=args.mode))
+    store.close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="okm",
@@ -151,6 +160,19 @@ def build_parser() -> argparse.ArgumentParser:
     srv.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     srv.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
     srv.set_defaults(func=cmd_serve)
+
+    board = sub.add_parser(
+        "board",
+        parents=[common],
+        help="ASCII radar/heatmap/sparklines (NumPy; sin datos ops usa ?)",
+    )
+    board.add_argument(
+        "--mode",
+        choices=("operator", "showcase"),
+        default="operator",
+        help="operator: huecos explícitos. showcase: series simuladas.",
+    )
+    board.set_defaults(func=cmd_board)
 
     return p
 
