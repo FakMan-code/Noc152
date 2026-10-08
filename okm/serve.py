@@ -16,7 +16,12 @@ from okm.ask import brief_for_ui, export_payload
 from okm.archify_adapter import find_archify_spec
 from okm.config import load_config
 from okm.engines import GraphEngine, available_engines, build_graph, parse_engine
-from okm.openapi_graph import find_openapi_spec
+from okm.openapi_graph import (
+    find_openapi_spec,
+    list_openapi_specs,
+    load_openapi_spec,
+    resolve_openapi_spec,
+)
 from okm.humanize import is_noise_service, product_name
 from okm.node_sources import build_source_zip, read_single_source
 from okm.store import ExpedienteStore
@@ -67,15 +72,22 @@ class BriefingApp:
                     if find_archify_spec(self.workspace)
                     else None
                 ),
-                "openapi_spec": (
-                    str(find_openapi_spec(self.workspace))
-                    if find_openapi_spec(self.workspace)
-                    else None
-                ),
+                "openapi_spec": _rel_or_abs(find_openapi_spec(self.workspace), self.workspace),
+                "openapi_specs": list_openapi_specs(self.workspace),
+                "docs_url": "/docs?spec=noc152",
                 "engines": available_engines(self.workspace),
             }
         finally:
             store.close()
+
+
+def _rel_or_abs(path: Path | None, workspace: Path) -> str | None:
+    if path is None:
+        return None
+    try:
+        return str(path.resolve().relative_to(workspace.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def _json_bytes(payload: Any, status: int = 200) -> tuple[int, bytes, str]:
@@ -152,6 +164,42 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
             if path in {"/", "/index.html"}:
                 html = (STATIC_DIR / "index.html").read_bytes()
                 self._send(200, html, "text/html; charset=utf-8")
+                return
+
+            if path in {"/docs", "/docs/", "/swagger", "/swagger/"}:
+                html = (STATIC_DIR / "docs.html").read_bytes()
+                self._send(200, html, "text/html; charset=utf-8")
+                return
+
+            if path == "/api/openapi":
+                specs = list_openapi_specs(app.workspace)
+                # Don't leak absolute paths to the browser
+                public = [
+                    {k: v for k, v in s.items() if k != "path"} for s in specs
+                ]
+                status, body, ctype = _json_bytes({"specs": public})
+                self._send(status, body, ctype)
+                return
+
+            if path.startswith("/api/openapi/"):
+                sid = path[len("/api/openapi/") :].strip("/")
+                if not sid:
+                    status, body, ctype = _json_bytes({"ok": False, "error": "missing spec"}, 400)
+                    self._send(status, body, ctype)
+                    return
+                spec_path = resolve_openapi_spec(sid, app.workspace)
+                if spec_path is None:
+                    status, body, ctype = _json_bytes({"ok": False, "error": "not found"}, 404)
+                    self._send(status, body, ctype)
+                    return
+                try:
+                    payload = load_openapi_spec(spec_path)
+                except (OSError, ValueError, json.JSONDecodeError) as exc:
+                    status, body, ctype = _json_bytes({"ok": False, "error": str(exc)}, 500)
+                    self._send(status, body, ctype)
+                    return
+                status, body, ctype = _json_bytes(payload)
+                self._send(status, body, ctype)
                 return
 
             if path.startswith("/static/"):

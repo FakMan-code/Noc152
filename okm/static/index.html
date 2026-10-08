@@ -237,6 +237,22 @@
       background: rgba(139, 92, 246, 0.12);
     }
 
+    .docs-strip {
+      display: grid; gap: 0.2rem; margin-bottom: 0.55rem;
+      padding-bottom: 0.5rem; border-bottom: 1px solid var(--line);
+    }
+    .docs-link {
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
+      color: #c4b5fd; text-decoration: none;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      background: rgba(139, 92, 246, 0.1);
+      border-radius: 8px; padding: 0.35rem 0.55rem;
+      display: inline-block; width: fit-content;
+    }
+    .docs-link:hover { border-color: rgba(139, 92, 246, 0.7); color: #ddd6fe; }
+    .docs-hint {
+      font-family: var(--mono); font-size: 0.62rem; color: var(--muted); line-height: 1.35;
+    }
     .ask-row { display: grid; gap: 0.4rem; }
     textarea {
       width: 100%; min-height: 64px; resize: vertical;
@@ -357,6 +373,12 @@
           <span class="sub" id="askMode">lee el mapa · Ollama</span>
         </div>
         <div class="panel-b">
+          <div class="docs-strip" id="docsStrip">
+            <a class="docs-link" id="docsLink" href="/docs?spec=noc152" target="_blank" rel="noopener">
+              Docs API · Swagger
+            </a>
+            <span class="docs-hint">contrato HTTP consultable (el grafo 3D sigue siendo la vista principal)</span>
+          </div>
           <div class="thread" id="thread"></div>
           <div class="ask-row">
             <textarea id="question" placeholder="Ej: ¿qué hace este nodo? ¿cómo llega al Client?"></textarea>
@@ -1645,6 +1667,20 @@
         });
       }
       if (opts.export) bindExportRow(div, opts.export);
+      if (opts.docsSpec) {
+        const row = document.createElement("div");
+        row.className = "export-row";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "primary";
+        btn.textContent = "Abrir Docs API (Swagger)";
+        btn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openDocsFromAsk(opts.docsSpec);
+        });
+        row.appendChild(btn);
+        div.appendChild(row);
+      }
       el("thread").appendChild(div);
       el("thread").scrollTop = el("thread").scrollHeight;
     }
@@ -1675,8 +1711,19 @@
               ? `mapa · ${data.model || "ollama"}`
               : "mapa + expediente";
         el("askMode").textContent = mode;
+        const openApiAsk = /openapi|swagger|endpoint|\/api\//i.test(q);
+        let docsSpec = null;
+        if (openApiAsk || state.engine === "openapi") {
+          if (state.engine === "openapi") {
+            const product = (metaCache?.openapi_specs || []).find((s) => s.id !== "noc152");
+            docsSpec = product?.id || "martian-bank";
+          } else {
+            docsSpec = "noc152";
+          }
+        }
         addBubble("Noc152", data.answer || "Sin respuesta", {
           export: data.mode === "source" ? data.export : null,
+          docsSpec,
         });
       } catch (err) {
         el("askMode").textContent = "error";
@@ -1736,6 +1783,7 @@
 
     el("serviceSelect").addEventListener("change", (e) => loadService(e.target.value));
     el("engineSelect").addEventListener("change", () => {
+      syncDocsLink(metaCache, el("engineSelect").value);
       if (state.service) loadService(state.service);
     });
     el("askBtn").addEventListener("click", ask);
@@ -1793,9 +1841,35 @@
         }).join("");
     }
 
+    function syncDocsLink(meta, engine) {
+      const link = el("docsLink");
+      if (!link) return;
+      const specs = Array.isArray(meta?.openapi_specs) ? meta.openapi_specs : [];
+      let specId = "noc152";
+      if (engine === "openapi") {
+        const product = specs.find((s) => s.id !== "noc152");
+        if (product) specId = product.id;
+      }
+      const hit = specs.find((s) => s.id === specId);
+      link.href = hit?.docs_url || meta?.docs_url || `/docs?spec=${encodeURIComponent(specId)}`;
+      link.textContent =
+        engine === "openapi"
+          ? `Docs API · ${hit?.title || specId}`
+          : "Docs API · Swagger";
+      link.title = "Abrir documentación OpenAPI (tipo Swagger) en otra pestaña";
+    }
+
+    function openDocsFromAsk(specId) {
+      const url = `/docs?spec=${encodeURIComponent(specId || "noc152")}`;
+      window.open(url, "_blank", "noopener");
+    }
+
+    let metaCache = null;
+
     (async function boot() {
       try {
         const meta = await api("/api/meta");
+        metaCache = meta;
         document.title = (meta.product_name || "Noc152") +
           (meta.version ? ` · v${meta.version}` : "");
         renderScopes(meta.scopes);
@@ -1807,6 +1881,7 @@
           const ids = meta.engines.map((e) => e.id);
           el("engineSelect").value = ids.includes(preferred) ? preferred : (ids[0] || "combined");
         }
+        syncDocsLink(meta, el("engineSelect")?.value || "combined");
         const services = meta.services || [];
         const nSvc = services.length;
         const overview = [];

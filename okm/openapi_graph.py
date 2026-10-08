@@ -22,33 +22,91 @@ EDGE_COLOR = "#3a3a3a"
 EDGE_SCHEMA = "#475569"
 
 
-def find_openapi_spec(workspace: Path | None = None) -> Path | None:
-    """Prefer workspace/openapi/*, then bundled docs/openapi/*."""
+def _openapi_roots(workspace: Path | None = None) -> list[Path]:
     roots: list[Path] = []
     if workspace is not None:
-        roots.append(workspace.expanduser().resolve() / "openapi")
-        roots.append(workspace.expanduser().resolve())
+        ws = workspace.expanduser().resolve()
+        roots.append(ws / "openapi")
+        roots.append(ws)
     roots.append(_PKG_DOCS)
+    return roots
 
-    patterns = (
-        "*.openapi.json",
-        "openapi.json",
-        "swagger.json",
-        "*openapi*.json",
-    )
-    for root in roots:
+
+def _spec_id(path: Path) -> str:
+    name = path.name.lower()
+    if "noc152" in name or "briefing" in name:
+        return "noc152"
+    if "martian" in name:
+        return "martian-bank"
+    if "microservices" in name or "boutique" in name:
+        return "microservices-demo"
+    stem = path.stem  # strips .json
+    if stem.lower().endswith(".openapi"):
+        stem = stem[: -len(".openapi")]
+    elif stem.lower().endswith("openapi"):
+        stem = stem[: -len("openapi")].rstrip(".-_")
+    return (stem or "openapi").replace(" ", "-").lower()
+
+
+def list_openapi_specs(workspace: Path | None = None) -> list[dict[str, Any]]:
+    """Discover OpenAPI JSON files (workspace first, then bundled docs)."""
+    patterns = ("*.openapi.json", "openapi.json", "swagger.json", "*openapi*.json")
+    by_id: dict[str, dict[str, Any]] = {}
+    for root in _openapi_roots(workspace):
         if not root.is_dir():
             continue
         found: list[Path] = []
         for pattern in patterns:
             found.extend(root.glob(pattern))
-        # Prefer explicit *.openapi.json in openapi/ folders.
-        found = [p for p in found if p.is_file()]
-        if not found:
-            continue
-        found.sort(key=lambda p: (0 if "openapi" in p.name.lower() else 1, -p.stat().st_mtime))
-        return found[0]
+        for path in found:
+            if not path.is_file():
+                continue
+            sid = _spec_id(path)
+            # First win: workspace roots are listed before bundled docs.
+            if sid in by_id:
+                continue
+            title = sid
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                title = str((data.get("info") or {}).get("title") or sid)
+            except (OSError, json.JSONDecodeError, TypeError):
+                pass
+            by_id[sid] = {
+                "id": sid,
+                "title": title,
+                "path": str(path),
+                "url": f"/api/openapi/{sid}",
+                "docs_url": f"/docs?spec={sid}",
+            }
+    # Prefer brain first in UI lists
+    order = {"noc152": 0, "martian-bank": 1, "microservices-demo": 2}
+    return sorted(by_id.values(), key=lambda s: (order.get(s["id"], 9), s["title"].lower()))
+
+
+def resolve_openapi_spec(spec_id: str, workspace: Path | None = None) -> Path | None:
+    want = (spec_id or "").strip().lower()
+    if not want:
+        return find_openapi_spec(workspace)
+    for item in list_openapi_specs(workspace):
+        if item["id"] == want:
+            return Path(item["path"])
     return None
+
+
+def find_openapi_spec(workspace: Path | None = None) -> Path | None:
+    """Prefer workspace/openapi/*, then bundled docs/openapi/*."""
+    specs = list_openapi_specs(workspace)
+    if not specs:
+        return None
+    # Prefer product/demo specs for the 3D OpenAPI engine; briefing is for /docs.
+    for sid in ("martian-bank", "microservices-demo"):
+        for item in specs:
+            if item["id"] == sid:
+                return Path(item["path"])
+    for item in specs:
+        if item["id"] != "noc152":
+            return Path(item["path"])
+    return Path(specs[0]["path"])
 
 
 def load_openapi_spec(path: Path) -> dict[str, Any]:

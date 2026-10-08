@@ -30,10 +30,17 @@ Cuando el código **no esté** en el workspace local (otro repo, otra máquina, 
 
 MCP no reemplaza el expediente: es un **brazo** para ir a buscar; el log queda igual.
 
+## Docs API (Swagger)
+
+Desde el panel **Asistente** → **Docs API · Swagger**, o abrí `/docs?spec=noc152`.
+Es la vista tipo minuto 10:40 del video de documentación: contrato HTTP consultable.
+El grafo 3D sigue siendo la cara principal.
+
 ## Probar
 
 ```powershell
 python -m okm.cli serve --workspace .demo_noc152
 # En la UI: seleccioná Combinado → “dame el código fuente de combinado”
 # Logs: .demo_noc152/audit/ask/
+# Docs: http://127.0.0.1:8765/docs?spec=noc152
 ```

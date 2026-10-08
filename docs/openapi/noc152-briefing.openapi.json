@@ -1,0 +1,207 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Noc152 Briefing API",
+    "version": "0.2.1",
+    "description": "API local del cerebro Noc152: meta, grafo 3D, preguntas auditadas y export de código. El mapa Combinado sigue siendo la vista principal; esto documenta el contrato HTTP para agentes y operadores."
+  },
+  "servers": [
+    { "url": "http://127.0.0.1:8765", "description": "serve local" }
+  ],
+  "tags": [
+    { "name": "meta", "description": "Workspace y motores" },
+    { "name": "graph", "description": "Proyección 3D" },
+    { "name": "ask", "description": "Asistente grounded + audit" },
+    { "name": "source", "description": "Código de nodos lógicos" },
+    { "name": "evidence", "description": "Evidencia del expediente" },
+    { "name": "docs", "description": "Specs OpenAPI consultables" }
+  ],
+  "paths": {
+    "/api/meta": {
+      "get": {
+        "tags": ["meta"],
+        "operationId": "getMeta",
+        "summary": "Meta del workspace (servicios, motores, version)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Meta" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/services": {
+      "get": {
+        "tags": ["meta"],
+        "operationId": "listServices",
+        "summary": "Listar servicios del expediente",
+        "responses": { "200": { "description": "Lista de servicios" } }
+      }
+    },
+    "/api/graph/{name}": {
+      "get": {
+        "tags": ["graph"],
+        "operationId": "getGraph",
+        "summary": "Grafo 3D (Combinado / Archify / Noc152 / OpenAPI)",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "__system__ | __archify__ | nombre de servicio"
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["combined", "archify", "noc152", "openapi"],
+              "default": "combined"
+            }
+          }
+        ],
+        "responses": { "200": { "description": "Nodos, aristas, details, intro" } }
+      }
+    },
+    "/api/ask": {
+      "post": {
+        "tags": ["ask"],
+        "operationId": "askAgent",
+        "summary": "Preguntar al asistente (dossier + código + audit)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AskRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Respuesta (mode agent|source|retrieval)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AskResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/source/file": {
+      "get": {
+        "tags": ["source"],
+        "operationId": "downloadSourceFile",
+        "summary": "Descargar archivo completo mapeado a un nodo",
+        "parameters": [
+          { "name": "focus", "in": "query", "schema": { "type": "string" }, "example": "role:combinado" },
+          { "name": "path", "in": "query", "required": true, "schema": { "type": "string" }, "example": "okm/noc_combined.py" }
+        ],
+        "responses": { "200": { "description": "Texto del archivo" } }
+      }
+    },
+    "/api/source/bundle": {
+      "get": {
+        "tags": ["source"],
+        "operationId": "downloadSourceZip",
+        "summary": "ZIP con todos los archivos del nodo",
+        "parameters": [
+          { "name": "focus", "in": "query", "schema": { "type": "string" }, "example": "role:combinado" }
+        ],
+        "responses": { "200": { "description": "application/zip" } }
+      }
+    },
+    "/api/evidence/{id}": {
+      "get": {
+        "tags": ["evidence"],
+        "operationId": "getEvidence",
+        "summary": "Abrir evidencia del expediente",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Excerpt + ref" } }
+      }
+    },
+    "/api/openapi": {
+      "get": {
+        "tags": ["docs"],
+        "operationId": "listOpenApiSpecs",
+        "summary": "Listar specs OpenAPI disponibles",
+        "responses": { "200": { "description": "Lista id/title/url" } }
+      }
+    },
+    "/api/openapi/{spec_id}": {
+      "get": {
+        "tags": ["docs"],
+        "operationId": "getOpenApiSpec",
+        "summary": "JSON OpenAPI por id (noc152 | martian-bank | …)",
+        "parameters": [
+          {
+            "name": "spec_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "OpenAPI 3.x document" } }
+      }
+    },
+    "/docs": {
+      "get": {
+        "tags": ["docs"],
+        "operationId": "swaggerUi",
+        "summary": "Swagger UI (HTML consultable)",
+        "parameters": [
+          {
+            "name": "spec",
+            "in": "query",
+            "schema": { "type": "string", "default": "noc152" },
+            "description": "Id de spec (ver GET /api/openapi)"
+          }
+        ],
+        "responses": { "200": { "description": "HTML Swagger UI" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "product_name": { "type": "string" },
+          "version": { "type": "string" },
+          "default_engine": { "type": "string" },
+          "engines": { "type": "array", "items": { "type": "object" } },
+          "services": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "AskRequest": {
+        "type": "object",
+        "required": ["question"],
+        "properties": {
+          "question": { "type": "string" },
+          "service": { "type": "string", "nullable": true },
+          "focus_node": { "type": "string", "nullable": true },
+          "use_llm": { "type": "boolean", "default": true }
+        }
+      },
+      "AskResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "answer": { "type": "string" },
+          "mode": { "type": "string", "enum": ["agent", "source", "retrieval", "empty"] },
+          "focus_node": { "type": "string", "nullable": true },
+          "sources_opened": { "type": "array", "items": { "type": "string" } },
+          "export": { "type": "object", "nullable": true },
+          "audit": { "type": "string" }
+        }
+      }
+    }
+  }
+}

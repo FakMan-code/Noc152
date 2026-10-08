@@ -88,6 +88,9 @@ Aristas: cyan + 1 punta = un sentido; lavanda + 2 puntas = ida/vuelta. Semáforo
 - `GET /api/graph/<servicio>` — expediente 3D de un servicio  
 - `POST /api/ask` — `{ "question": "...", "service": "<nombre>" }`  
 - `GET /api/evidence/<id>`  
+- `GET /docs` — Swagger UI (contrato OpenAPI consultable; el mapa 3D sigue siendo la vista principal)  
+- `GET /api/openapi` — lista de specs · `GET /api/openapi/<id>` — JSON  
+
 
 ## Comandos CLI
 
