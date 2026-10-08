@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Noc152 · Docs API</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css" />
   <style>
     :root {
       --bg: #0c0c0c;
@@ -15,15 +14,13 @@
       --accent: #f54e00;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font-family: system-ui, sans-serif;
-    }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+    body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; }
     .bar {
       display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;
       padding: 0.75rem 1rem; border-bottom: 1px solid var(--line);
       background: linear-gradient(180deg, #121212, var(--bg));
-      position: sticky; top: 0; z-index: 20;
+      flex: 0 0 auto;
     }
     .bar h1 {
       margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.03em;
@@ -44,36 +41,31 @@
     .bar .grow { flex: 1; }
     .note {
       margin: 0; padding: 0.55rem 1rem; font-size: 0.78rem; color: var(--muted);
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--line); flex: 0 0 auto;
     }
-    /* Swagger on dark chrome */
-    .swagger-ui { background: var(--bg); }
-    .swagger-ui .topbar { display: none; }
-    .swagger-ui .info .title { color: var(--text); }
-    .swagger-ui .info p, .swagger-ui .info li, .swagger-ui .markdown p { color: #c8c8c8; }
-    .swagger-ui .scheme-container { background: var(--panel); box-shadow: none; }
-    .swagger-ui .opblock-tag { color: var(--text); border-color: var(--line); }
-    .swagger-ui section.models { border-color: var(--line); }
+    #app { flex: 1 1 auto; min-height: 0; }
   </style>
 </head>
 <body>
   <header class="bar">
     <h1>Noc<em>152</em></h1>
-    <span class="tag">docs · OpenAPI</span>
+    <span class="tag">docs · Scalar</span>
     <label class="tag" for="specSelect">Spec</label>
     <select id="specSelect" aria-label="Spec OpenAPI"></select>
     <span class="grow"></span>
     <a href="/" class="primary">← Mapa 3D</a>
   </header>
   <p class="note">
-    Vista consultable del contrato HTTP (estilo Swagger). El grafo 3D sigue siendo la cara principal del NOC.
+    Referencia del contrato HTTP (lectura). Sin “probar endpoint” acá: el NOC consulta el mapa;
+    esto documenta paths/schemas para el agente y operadores.
   </p>
-  <div id="swagger-ui"></div>
+  <div id="app"></div>
 
-  <script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const select = document.getElementById("specSelect");
+    let apiRef = null;
 
     function preferredSpec(list) {
       const q = params.get("spec");
@@ -84,14 +76,21 @@
 
     function mount(specId) {
       const url = `/api/openapi/${encodeURIComponent(specId)}`;
-      SwaggerUIBundle({
+      const host = document.getElementById("app");
+      host.innerHTML = "";
+      apiRef = Scalar.createApiReference("#app", {
         url,
-        dom_id: "#swagger-ui",
-        deepLinking: true,
-        presets: [SwaggerUIBundle.presets.apis],
-        layout: "BaseLayout",
-        tryItOutEnabled: true,
-        defaultModelsExpandDepth: 1,
+        theme: "kepler",
+        layout: "modern",
+        darkMode: true,
+        forceDarkModeState: "dark",
+        hideDarkModeToggle: true,
+        // Docs-first: lectura del contrato; sin Try it out (NOC ≠ Postman)
+        hideClientButton: true,
+        hideTestRequestButton: true,
+        hiddenClients: true,
+        hideModels: false,
+        defaultOpenAllTags: false,
       });
       const next = new URL(location.href);
       next.searchParams.set("spec", specId);
@@ -110,7 +109,7 @@
       mount(id);
       select.addEventListener("change", () => mount(select.value));
     })().catch((err) => {
-      document.getElementById("swagger-ui").innerHTML =
+      document.getElementById("app").innerHTML =
         `<p class="note">No pude cargar specs: ${err.message}</p>`;
     });
   </script>

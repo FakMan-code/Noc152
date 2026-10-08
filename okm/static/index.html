@@ -375,9 +375,9 @@
         <div class="panel-b">
           <div class="docs-strip" id="docsStrip">
             <a class="docs-link" id="docsLink" href="/docs?spec=noc152" target="_blank" rel="noopener">
-              Docs API · Swagger
+              Docs API · Scalar
             </a>
-            <span class="docs-hint">contrato HTTP consultable (el grafo 3D sigue siendo la vista principal)</span>
+            <span class="docs-hint">contrato HTTP en lectura (sin probar endpoints). El grafo 3D es la vista principal.</span>
           </div>
           <div class="thread" id="thread"></div>
           <div class="ask-row">
@@ -1673,7 +1673,7 @@
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "primary";
-        btn.textContent = "Abrir Docs API (Swagger)";
+        btn.textContent = "Abrir Docs API (Scalar)";
         btn.addEventListener("click", (ev) => {
           ev.stopPropagation();
           openDocsFromAsk(opts.docsSpec);
@@ -1855,8 +1855,8 @@
       link.textContent =
         engine === "openapi"
           ? `Docs API · ${hit?.title || specId}`
-          : "Docs API · Swagger";
-      link.title = "Abrir documentación OpenAPI (tipo Swagger) en otra pestaña";
+          : "Docs API · Scalar";
+      link.title = "Abrir referencia OpenAPI (Scalar, solo lectura) en otra pestaña";
     }
 
     function openDocsFromAsk(specId) {

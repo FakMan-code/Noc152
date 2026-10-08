@@ -30,10 +30,11 @@ Cuando el código **no esté** en el workspace local (otro repo, otra máquina, 
 
 MCP no reemplaza el expediente: es un **brazo** para ir a buscar; el log queda igual.
 
-## Docs API (Swagger)
+## Docs API (Scalar)
 
-Desde el panel **Asistente** → **Docs API · Swagger**, o abrí `/docs?spec=noc152`.
-Es la vista tipo minuto 10:40 del video de documentación: contrato HTTP consultable.
+Desde el panel **Asistente** → **Docs API · Scalar**, o abrí `/docs?spec=noc152`.
+Referencia OpenAPI moderna (reemplazo de Swagger UI): lectura de paths/schemas,
+sin “Try it out” — el NOC consulta el mapa; no es un cliente de pruebas.
 El grafo 3D sigue siendo la cara principal.
 
 ## Probar
