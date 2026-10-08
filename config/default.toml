@@ -77,7 +77,7 @@ fallback_root_service = true
 # Nombres de carpeta/manifiesto que no son servicios de producto
 noise_service_names = [
   "src", "docs", "tests", "scripts", "helm-chart",
-  "nginx", "performance_locust", "martianbank", "noc152",
+  "nginx", "performance_locust", "martianbank",
 ]
 
 [store]

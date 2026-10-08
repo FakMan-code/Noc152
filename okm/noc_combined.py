@@ -13,6 +13,7 @@ from okm.health import service_health, status_color, status_label
 from okm.humanize import is_noise_service, source_display_name
 from okm.layout3d import apply_positions
 from okm.models import Service
+from okm.node_sources import NODE_SOURCE_MAP
 from okm.store import ExpedienteStore
 
 # Nombre corto en el grafo + una línea de “qué es esto”.
@@ -121,7 +122,69 @@ _PRODUCT_STORY: dict[str, dict[str, str]] = {
         "body": "Tienda demo de Google: catalogo, carrito, checkout, pago y envio.",
         "flow": "Tienda -> Catalogo/Carrito -> Checkout -> Pago/Envio",
     },
+    "proyecto-noc-152": {
+        "title": "Noc152",
+        "body": (
+            "Expediente operacional + mapa 3D: ingestás un repo, guardás claims con evidencia "
+            "y explorás la app en Combinado (roles), Archify, Noc152 o OpenAPI."
+        ),
+        "flow": "Ingest → Expediente → Mapa (Combinado) → Asistente",
+    },
+    "noc152": {
+        "title": "Noc152",
+        "body": (
+            "Expediente operacional + mapa 3D: ingestás un repo, guardás claims con evidencia "
+            "y explorás la app en Combinado (roles), Archify, Noc152 o OpenAPI."
+        ),
+        "flow": "Ingest → Expediente → Mapa (Combinado) → Asistente",
+    },
 }
+
+# Capas lógicas del propio Noc152 (mono-repo → historia legible en Combinado).
+_SELF_ROLES: list[dict[str, Any]] = [
+    {
+        "id": "role:ingest",
+        "role": "Ingest",
+        "blurb": "Lee un repo (local o git), detecta servicios por manifiestos y extrae claims.",
+        "deps": [],
+    },
+    {
+        "id": "role:expediente",
+        "role": "Expediente",
+        "blurb": "SQLite + blobs: servicios, claims, evidencia y gaps con procedencia.",
+        "deps": ["role:ingest"],
+    },
+    {
+        "id": "role:combinado",
+        "role": "Combinado",
+        "blurb": "Mapa historia: roles humanos, formas y deps. Arranque por defecto del briefing.",
+        "deps": ["role:expediente"],
+    },
+    {
+        "id": "role:archify",
+        "role": "Archify",
+        "blurb": "Proyecta un IR de arquitectura curado al mismo visor 3D.",
+        "deps": ["role:expediente"],
+    },
+    {
+        "id": "role:openapi",
+        "role": "OpenAPI",
+        "blurb": "Contrato HTTP: tags, operations y schemas (borde, no cerebro).",
+        "deps": ["role:expediente"],
+    },
+    {
+        "id": "role:asistente",
+        "role": "Asistente",
+        "blurb": "Preguntas grounded en el dossier del mapa + Ollama opcional.",
+        "deps": ["role:expediente", "role:combinado"],
+    },
+    {
+        "id": "role:serve",
+        "role": "Briefing",
+        "blurb": "UI local Three.js: selector de motor, drill por capas y panel de detalle.",
+        "deps": ["role:combinado", "role:archify", "role:openapi", "role:asistente"],
+    },
+]
 
 _EDGE = "#3a3a3a"
 _EDGE_DEP = "#64748b"
@@ -161,15 +224,117 @@ def _story(service_name: str) -> dict[str, str]:
 
 
 def _product_story(source_uri: str | None, title: str) -> dict[str, str]:
-    uri = (source_uri or "").lower()
+    uri = (source_uri or "").lower().replace("\\", "/")
+    title_l = (title or "").lower()
     for key, story in _PRODUCT_STORY.items():
-        if key in uri:
+        if key in uri or key in title_l:
             return story
+    if "noc" in title_l and "152" in title_l:
+        return _PRODUCT_STORY["noc152"]
     return {
         "title": title,
         "body": f"Mapa de servicios de «{title}». Cada nodo es una pieza que habla con otras.",
         "flow": "Producto → servicios → dependencias",
     }
+
+
+def _is_self_map(source_uri: str | None, title: str, services: list[Service]) -> bool:
+    """True when the workspace is Noc152 itself (mono-repo → capas lógicas)."""
+    uri = (source_uri or "").lower().replace("\\", "/")
+    title_l = (title or "").lower()
+    if "proyecto-noc-152" in uri or title_l in {"noc152", "noc 152"}:
+        return True
+    if len(services) == 1 and services[0].name.lower() in {"noc152", "okm"}:
+        return True
+    return False
+
+
+def _append_self_roles(
+    *,
+    hub_id: str,
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    details: dict[str, dict[str, Any]],
+) -> None:
+    for role in _SELF_ROLES:
+        rid = str(role["id"])
+        nodes.append(
+            {
+                "id": rid,
+                "kind": "service",
+                "label": _clip(str(role["role"])),
+                "layer": 1,
+                "color": status_color("neutral"),
+                "size": 1.1,
+                "facet": "service",
+                "service_name": rid,
+                "health": "neutral",
+                "health_label": status_label("neutral"),
+                "criticality": "media",
+                "role": str(role["role"]),
+            }
+        )
+        edges.append(
+            {
+                "id": f"{hub_id}->{rid}",
+                "source": hub_id,
+                "target": rid,
+                "kind": "contains",
+                "label": "",
+                "color": _EDGE,
+            }
+        )
+        srcs = NODE_SOURCE_MAP.get(rid, []) or NODE_SOURCE_MAP.get(
+            str(role["role"]).lower(), []
+        )
+        sections: list[dict[str, Any]] = [
+            {
+                "title": "Qué hace",
+                "items": [{"statement": str(role["blurb"]), "kind": "observed"}],
+            }
+        ]
+        if srcs:
+            sections.append(
+                {
+                    "title": "Código fuente",
+                    "items": [
+                        {
+                            "statement": f"Archivo: {p}",
+                            "kind": "observed",
+                        }
+                        for p in srcs
+                    ],
+                }
+            )
+        details[rid] = {
+            "title": str(role["role"]),
+            "kind": "service",
+            "kind_label": "capa",
+            "subtitle": "pieza de Noc152",
+            "summary": str(role["blurb"]),
+            "meta": {
+                "rol": str(role["role"]),
+                "tipo": "capa lógica",
+                "fuentes": ", ".join(srcs) if srcs else "—",
+            },
+            "sections": sections,
+            "facet": "service",
+            "sources": srcs,
+        }
+    for role in _SELF_ROLES:
+        rid = str(role["id"])
+        for dep in role.get("deps") or []:
+            dep_id = str(dep)
+            edges.append(
+                {
+                    "id": f"{rid}->{dep_id}",
+                    "source": rid,
+                    "target": dep_id,
+                    "kind": "depends",
+                    "label": "",
+                    "color": _EDGE_DEP,
+                }
+            )
 
 
 def _dep_pairs(services: list[Service]) -> list[tuple[str, str]]:
@@ -192,6 +357,7 @@ def build_noc_combined_system(store: ExpedienteStore, workspace: Path | None = N
     product = _product_story(source_uri, title)
     services = [s for s in store.list_services() if not is_noise_service(s.name)]
     services.sort(key=lambda s: (_criticality(s.name) != "alta", s.name.lower()))
+    self_map = _is_self_map(source_uri, title, services)
 
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
@@ -218,7 +384,10 @@ def build_noc_combined_system(store: ExpedienteStore, workspace: Path | None = N
         "kind_label": "producto",
         "subtitle": "cómo funciona la app",
         "summary": product["body"],
-        "meta": {"fuente": source_uri or "local", "servicios": len(services)},
+        "meta": {
+            "fuente": source_uri or "local",
+            "servicios": len(_SELF_ROLES) if self_map else len(services),
+        },
         "sections": [
             {
                 "title": "Historia del usuario",
@@ -226,7 +395,11 @@ def build_noc_combined_system(store: ExpedienteStore, workspace: Path | None = N
                     {"statement": product["body"], "kind": "observed"},
                     {"statement": f"Flujo: {product['flow']}", "kind": "inferred"},
                     {
-                        "statement": "Las flechas unen quién necesita a quién. Los endpoints están en el motor OpenAPI.",
+                        "statement": (
+                            "Capas lógicas del propio Noc152 (mono-repo)."
+                            if self_map
+                            else "Las flechas unen quién necesita a quién. Los endpoints están en el motor OpenAPI."
+                        ),
                         "kind": "inferred",
                     },
                 ],
@@ -234,6 +407,38 @@ def build_noc_combined_system(store: ExpedienteStore, workspace: Path | None = N
         ],
         "facet": "product",
     }
+
+    if self_map:
+        _append_self_roles(hub_id=hub_id, nodes=nodes, edges=edges, details=details)
+        apply_positions(nodes, edges, seed=152)
+        return {
+            "title": product.get("title") or title,
+            "engine": "combined",
+            "locale": "es",
+            "view": "system",
+            "intro": {
+                "title": product.get("title") or title,
+                "body": product["body"],
+                "what_is_it": (
+                    f"{product['flow']}. "
+                    f"{len(_SELF_ROLES)} capas · mapa del propio Noc152."
+                ),
+                "node_legend": [],
+                "tips": [],
+            },
+            "service": {
+                "id": "system",
+                "name": "__system__",
+                "summary": product["body"],
+            },
+            "nodes": nodes,
+            "edges": edges,
+            "details": details,
+            "facets": [
+                {"id": "product", "label": "producto"},
+                {"id": "service", "label": "servicio"},
+            ],
+        }
 
     svc_node_ids: dict[str, str] = {}
 

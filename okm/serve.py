@@ -18,6 +18,7 @@ from okm.config import load_config
 from okm.engines import GraphEngine, available_engines, build_graph, parse_engine
 from okm.openapi_graph import find_openapi_spec
 from okm.humanize import is_noise_service, product_name
+from okm.node_sources import build_source_zip, read_single_source
 from okm.store import ExpedienteStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -60,7 +61,7 @@ class BriefingApp:
                     for s in services
                     if not is_noise_service(s.name)
                 ],
-                "has_system_view": sum(1 for s in services if not is_noise_service(s.name)) > 1,
+                "has_system_view": sum(1 for s in services if not is_noise_service(s.name)) >= 1,
                 "archify_spec": (
                     str(find_archify_spec(self.workspace).relative_to(self.workspace))
                     if find_archify_spec(self.workspace)
@@ -89,12 +90,24 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
         def log_message(self, fmt: str, *args: Any) -> None:
             print(f"[okm-brief] {self.address_string()} {fmt % args}")
 
-        def _send(self, status: int, body: bytes, content_type: str) -> None:
+        def _send(
+            self,
+            status: int,
+            body: bytes,
+            content_type: str,
+            *,
+            download_name: str | None = None,
+        ) -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("Access-Control-Allow-Origin", "*")
+            if download_name:
+                self.send_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{download_name}"',
+                )
             self.end_headers()
             self.wfile.write(body)
 
@@ -218,6 +231,51 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     store.close()
                 status, body, ctype = _json_bytes(payload)
                 self._send(status, body, ctype)
+                return
+
+            if path == "/api/source/file":
+                focus = (qs.get("focus") or [None])[0]
+                rel = (qs.get("path") or [None])[0]
+                if not rel:
+                    status, body, ctype = _json_bytes({"ok": False, "error": "missing path"}, 400)
+                    self._send(status, body, ctype)
+                    return
+                store = app.open_store()
+                try:
+                    file_hit = read_single_source(
+                        store, focus_node=str(focus) if focus else None, rel_path=str(rel)
+                    )
+                finally:
+                    store.close()
+                if not file_hit:
+                    status, body, ctype = _json_bytes({"ok": False, "error": "not found"}, 404)
+                    self._send(status, body, ctype)
+                    return
+                raw = file_hit["content"].encode("utf-8")
+                name = Path(file_hit["path"]).name
+                ctype = "text/plain; charset=utf-8"
+                if name.endswith(".py"):
+                    ctype = "text/x-python; charset=utf-8"
+                elif name.endswith(".html"):
+                    ctype = "text/html; charset=utf-8"
+                self._send(200, raw, ctype, download_name=name)
+                return
+
+            if path == "/api/source/bundle":
+                focus = (qs.get("focus") or [None])[0]
+                store = app.open_store()
+                try:
+                    packed = build_source_zip(
+                        store, focus_node=str(focus) if focus else None
+                    )
+                finally:
+                    store.close()
+                if not packed:
+                    status, body, ctype = _json_bytes({"ok": False, "error": "not found"}, 404)
+                    self._send(status, body, ctype)
+                    return
+                raw, zip_name = packed
+                self._send(200, raw, "application/zip", download_name=zip_name)
                 return
 
             if path.startswith("/api/graph/"):

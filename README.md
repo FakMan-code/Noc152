@@ -1,6 +1,6 @@
 # Noc152
 
-**v0.2.0** · Repo: https://github.com/FakMan-code/Noc152
+**v0.2.1** · Repo: https://github.com/FakMan-code/Noc152
 
 Expediente operacional + mapa 3D consultable.
 

@@ -264,6 +264,25 @@
       color: var(--accent); border: 1px solid rgba(245,78,0,0.35); background: transparent;
     }
     .bubble .expand-ans:hover { background: var(--accent-dim); }
+    .bubble .export-row {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem;
+      padding-top: 0.45rem; border-top: 1px solid var(--line);
+    }
+    .bubble .export-row button, .bubble .export-row a.export-btn {
+      font: inherit; font-family: var(--mono); font-size: 0.66rem;
+      padding: 0.28rem 0.5rem; border-radius: 7px; cursor: pointer;
+      color: #e2e8f0; border: 1px solid rgba(226,232,240,0.25);
+      background: rgba(255,255,255,0.04); text-decoration: none;
+    }
+    .bubble .export-row button.primary, .bubble .export-row a.export-btn.primary {
+      color: #fff; border-color: var(--accent); background: var(--accent-dim);
+    }
+    .bubble .export-row button:hover, .bubble .export-row a.export-btn:hover {
+      border-color: #94a3b8;
+    }
+    .bubble .export-hint {
+      width: 100%; font-family: var(--mono); font-size: 0.62rem; color: var(--muted);
+    }
     #scopeSelect:disabled {
       opacity: 0.72;
       cursor: not-allowed;
@@ -594,6 +613,13 @@
       if (/\b(transfer|pago|payment|checkout)\b/.test(role)) return "ring";
       if (/\b(pr[eé]stamo|loan|cart)\b/.test(role)) return "capsule";
       if (/\b(cajero|atm|anuncio|ad)\b/.test(role)) return "block";
+      if (/\bingest\b/.test(role)) return "drum";
+      if (/\bexpediente\b/.test(role)) return "block";
+      if (/\bcombinado\b/.test(role)) return "hub";
+      if (/\barchify\b/.test(role)) return "hex";
+      if (/\bopenapi\b/.test(role)) return "key";
+      if (/\basistente\b/.test(role)) return "screen";
+      if (/\bbriefing\b/.test(role)) return "capsule";
       if (kind === "watch" || kind === "operation") return "key";
       if (kind === "schema" || kind === "tag" || kind === "server") return "block";
       if (kind === "gap" || kind === "security") return "spike";
@@ -1532,7 +1558,77 @@
       w.document.close();
     }
 
-    function addBubble(who, text) {
+    async function copySourceFile(url, btn) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        await navigator.clipboard.writeText(text);
+        if (btn) {
+          const prev = btn.textContent;
+          btn.textContent = "Copiado";
+          setTimeout(() => { btn.textContent = prev; }, 1400);
+        }
+      } catch (err) {
+        alert(`No pude copiar: ${err.message || err}`);
+      }
+    }
+
+    function bindExportRow(div, exp) {
+      if (!exp?.files?.length) return;
+      const row = document.createElement("div");
+      row.className = "export-row";
+      const hint = document.createElement("div");
+      hint.className = "export-hint";
+      hint.textContent = `Export · ${exp.label || "nodo"} (archivo completo)`;
+      row.appendChild(hint);
+
+      const primary = exp.files.find((f) => f.role === "primary") || exp.files[0];
+      if (primary?.url) {
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "primary";
+        copyBtn.textContent = `Copiar ${primary.path.split("/").pop()}`;
+        copyBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          copySourceFile(primary.url, copyBtn);
+        });
+        row.appendChild(copyBtn);
+
+        const dl = document.createElement("a");
+        dl.className = "export-btn";
+        dl.href = primary.url;
+        dl.download = primary.path.split("/").pop();
+        dl.textContent = "Descargar primario";
+        dl.addEventListener("click", (ev) => ev.stopPropagation());
+        row.appendChild(dl);
+      }
+
+      if (exp.bundle_url) {
+        const zip = document.createElement("a");
+        zip.className = "export-btn primary";
+        zip.href = exp.bundle_url;
+        zip.download = "";
+        zip.textContent = "Descargar .zip";
+        zip.addEventListener("click", (ev) => ev.stopPropagation());
+        row.appendChild(zip);
+      }
+
+      for (const f of exp.files) {
+        if (f === primary || !f.url) continue;
+        const a = document.createElement("a");
+        a.className = "export-btn";
+        a.href = f.url;
+        a.download = f.path.split("/").pop();
+        a.textContent = f.path.split("/").pop();
+        a.title = f.path;
+        a.addEventListener("click", (ev) => ev.stopPropagation());
+        row.appendChild(a);
+      }
+      div.appendChild(row);
+    }
+
+    function addBubble(who, text, opts = {}) {
       const div = document.createElement("div");
       div.className = `bubble ${who === "vos" ? "user" : ""}`;
       const body = who === "vos" ? esc(text) : fmtMd(text);
@@ -1548,6 +1644,7 @@
           openAnswerTab("Respuesta del asistente", text);
         });
       }
+      if (opts.export) bindExportRow(div, opts.export);
       el("thread").appendChild(div);
       el("thread").scrollTop = el("thread").scrollHeight;
     }
@@ -1572,11 +1669,15 @@
           }),
         });
         const mode =
-          data.mode === "agent"
-            ? `mapa · ${data.model || "ollama"}`
-            : "mapa + expediente";
+          data.mode === "source"
+            ? "código real · audit"
+            : data.mode === "agent"
+              ? `mapa · ${data.model || "ollama"}`
+              : "mapa + expediente";
         el("askMode").textContent = mode;
-        addBubble("Noc152", data.answer || "Sin respuesta");
+        addBubble("Noc152", data.answer || "Sin respuesta", {
+          export: data.mode === "source" ? data.export : null,
+        });
       } catch (err) {
         el("askMode").textContent = "error";
         addBubble("Noc152", `No pude responder: ${err.message}`);

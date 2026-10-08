@@ -2,6 +2,7 @@
 
 Uses local Ollama (qwen2.5) when available; falls back to structured retrieval.
 Never invents evidence: the model only sees dossier snippets we attach.
+Código de nodos lógicos: lectura local vía node_sources (auditada). MCP remoto = fase 2.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Any
 
 from okm.archify_adapter import find_archify_spec, load_archify_spec
 from okm.ask import detect_facets, rank_claims
+from okm.audit import write_ask_audit
 from okm.humanize import (
     facet_label,
     human_claim,
@@ -21,6 +23,13 @@ from okm.humanize import (
     kind_label,
 )
 from okm.models import Service
+from okm.node_sources import (
+    export_payload,
+    format_sources_block,
+    read_node_sources,
+    short_code_answer,
+    wants_source_code,
+)
 from okm.store import ExpedienteStore
 
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
@@ -31,21 +40,23 @@ _ARCHIFY_ALIASES = frozenset({"__archify__", "archify", ""})
 
 SYSTEM = """Sos el agente de Noc152:
 claro, directo, en español rioplatense neutro, sin relleno corporativo.
-Leés el mapa 3D (IR Archify) y el expediente del repo juntos.
+Leés el mapa 3D, el expediente y —si viene— CÓDIGO FUENTE real del repo.
 
 Reglas duras:
 1) Solo podés afirmar lo que esté en el DOSSIER. Si no está, decí que es un hueco.
 2) No inventes archivos, métricas, alertas ni runbooks.
 3) Si hay MAPA ARCHIFY, priorizalo para preguntas sobre nodos, enlaces o el dibujo.
 4) Si hay NODO EN FOCO, empezá por ese nodo (qué es, con quién conecta, fuentes).
-5) Cuando cites un hallazgo, mencioná path:líneas si existe.
-6) Explicá en criollo qué significa para un operador NOC.
-7) Si el dossier dice que algo es librería/cliente (no servidor), no lo trates como app desplegada.
+5) Si hay bloque CÓDIGO FUENTE DEL NODO, ese es el código real: citá paths y pegá
+   fragmentos relevantes. NO digas que no hay código de Combinado si ese bloque existe.
+6) Cuando cites un hallazgo, mencioná path:líneas si existe.
+7) Explicá en criollo qué significa para un operador NOC.
+8) Si el dossier dice que algo es librería/cliente (no servidor), no lo trates como app desplegada.
 
 Formato de respuesta (markdown liviano, sin tablas enormes):
 **Qué es** — una o dos frases
 **En el mapa** — nodos/enlaces relevantes
-**Evidencia** — refs concretas (o “sin fuente en el IR”)
+**Evidencia** — refs o código (paths)
 **Huecos** — qué no está
 **Siguiente** — qué mirar o preguntar después
 """
@@ -245,6 +256,7 @@ def build_dossier(
     *,
     limit: int = 10,
     focus_node: str | None = None,
+    source_files: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
     claims = store.claims_for(service.service_id)
     ranked = rank_claims(claims, question, limit=limit)
@@ -256,6 +268,13 @@ def build_dossier(
         f"Pregunta del operador: {question}",
         "",
     ]
+    if focus_node:
+        lines.append(f"NODO EN FOCO: {focus_node}")
+        lines.append("")
+    src_block = format_sources_block(source_files or [])
+    if src_block:
+        lines.append(src_block)
+        lines.append("")
     if map_block:
         lines.append(map_block)
         lines.append("")
@@ -363,13 +382,69 @@ def agent_answer(
             "mode": "empty",
         }
 
+    source_files = read_node_sources(store, focus_node=focus_node, question=q)
+    source_paths = [f["path"] for f in source_files]
+
+    # Pedido de código → resumen corto + export (UI copia/descarga archivo completo).
+    if wants_source_code(q) and (focus_node or source_files):
+        full_files = read_node_sources(
+            store, focus_node=focus_node, question=q, for_dossier=False
+        )
+        if not full_files and focus_node:
+            full_files = read_node_sources(
+                store, focus_node=focus_node, question=focus_node, for_dossier=False
+            )
+        source_paths = [f["path"] for f in full_files]
+        answer = short_code_answer(full_files, focus_node)
+        exp = export_payload(full_files, focus_node)
+        payload = {
+            "ok": True,
+            "answer": answer,
+            "hits": [],
+            "facets": ["code"],
+            "service": None,
+            "mode": "source",
+            "model": None,
+            "focus_node": focus_node,
+            "sources_opened": source_paths,
+            "export": exp,
+            "audit": "workspace/audit/ask/",
+        }
+        write_ask_audit(
+            store.workspace,
+            question=q,
+            service=service_name,
+            focus_node=focus_node,
+            mode="source",
+            model=None,
+            answer=answer,
+            ok=True,
+            sources_opened=source_paths,
+            extra={"export_label": exp.get("label"), "primary": exp.get("primary")},
+        )
+        return payload
+
     svc = _resolve_service(store, service_name, q)
     if svc is None:
         # Archify-only workspace: still answer from the map.
         map_block = _archify_map_block(store, q, focus_node)
-        if map_block and use_llm:
-            answer = _ollama_chat(map_block + f"\n\nPregunta:\n{q}", q, model=model)
+        dossier = map_block or ""
+        if source_files:
+            dossier = format_sources_block(source_files) + "\n\n" + dossier
+        if dossier and use_llm:
+            answer = _ollama_chat(dossier + f"\n\nPregunta:\n{q}", q, model=model)
             if answer:
+                write_ask_audit(
+                    store.workspace,
+                    question=q,
+                    service=service_name,
+                    focus_node=focus_node,
+                    mode="agent",
+                    model=model,
+                    answer=answer,
+                    ok=True,
+                    sources_opened=source_paths,
+                )
                 return {
                     "ok": True,
                     "answer": answer,
@@ -379,9 +454,10 @@ def agent_answer(
                     "mode": "agent",
                     "model": model,
                     "focus_node": focus_node,
+                    "sources_opened": source_paths,
                 }
         names = ", ".join(s.name for s in services) if services else "(ninguno)"
-        return {
+        fail = {
             "ok": False,
             "answer": f"Indicá el servicio. Disponibles: {names}",
             "hits": [],
@@ -389,8 +465,22 @@ def agent_answer(
             "service": None,
             "mode": "empty",
         }
+        write_ask_audit(
+            store.workspace,
+            question=q,
+            service=service_name,
+            focus_node=focus_node,
+            mode="empty",
+            model=None,
+            answer=fail["answer"],
+            ok=False,
+            sources_opened=source_paths,
+        )
+        return fail
 
-    hits, dossier = build_dossier(store, svc, q, focus_node=focus_node)
+    hits, dossier = build_dossier(
+        store, svc, q, focus_node=focus_node, source_files=source_files
+    )
     facets = sorted(f.value for f in detect_facets(q))
     mode = "retrieval"
     answer: str | None = None
@@ -416,6 +506,18 @@ def agent_answer(
         )
         mode = "retrieval"
 
+    write_ask_audit(
+        store.workspace,
+        question=q,
+        service=svc.name,
+        focus_node=focus_node,
+        mode=mode,
+        model=model if mode == "agent" else None,
+        answer=answer,
+        ok=True,
+        sources_opened=source_paths,
+    )
+
     return {
         "ok": True,
         "answer": answer,
@@ -429,4 +531,6 @@ def agent_answer(
         "mode": mode,
         "model": model if mode == "agent" else None,
         "focus_node": focus_node,
+        "sources_opened": source_paths,
+        "audit": "workspace/audit/ask/",
     }
