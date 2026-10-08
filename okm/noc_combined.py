@@ -238,13 +238,26 @@ def _product_story(source_uri: str | None, title: str) -> dict[str, str]:
     }
 
 
-def _is_self_map(source_uri: str | None, title: str, services: list[Service]) -> bool:
-    """True when the workspace is Noc152 itself (mono-repo → capas lógicas)."""
+def _is_self_map(
+    source_uri: str | None,
+    title: str,
+    services: list[Service],
+    workspace: Path | None = None,
+) -> bool:
+    """True when the workspace is Noc152 itself (mono-repo → capas lógicas).
+
+    No depende de un servicio llamado «Noc152» (ese nombre es ruido en demos).
+    """
     uri = (source_uri or "").lower().replace("\\", "/")
     title_l = (title or "").lower()
-    if "proyecto-noc-152" in uri or title_l in {"noc152", "noc 152"}:
+    if "proyecto-noc-152" in uri:
         return True
-    if len(services) == 1 and services[0].name.lower() in {"noc152", "okm"}:
+    if workspace is not None:
+        wp = str(workspace.resolve()).lower().replace("\\", "/")
+        if "demo_noc152" in wp or wp.rstrip("/").endswith("/.demo_noc152"):
+            return True
+    # Solo mono-servicio okm (no el label de producto Noc152)
+    if len(services) == 1 and services[0].name.lower() == "okm":
         return True
     return False
 
@@ -349,15 +362,61 @@ def _dep_pairs(services: list[Service]) -> list[tuple[str, str]]:
     return pairs
 
 
+# Catálogos conocidos: evita que un servicio suelto (ej. «Noc152») contamine el mapa del banco.
+_PRODUCT_SERVICE_ALLOW: dict[str, frozenset[str]] = {
+    "martian-bank-demo": frozenset(
+        {
+            "ui",
+            "customer-auth",
+            "dashboard",
+            "accounts",
+            "transactions",
+            "loan",
+            "atm-locator",
+        }
+    ),
+    "microservices-demo": frozenset(
+        {
+            "frontend",
+            "checkoutservice",
+            "paymentservice",
+            "cartservice",
+            "productcatalogservice",
+            "currencyservice",
+            "shippingservice",
+            "emailservice",
+            "recommendationservice",
+            "adservice",
+            "loadgenerator",
+        }
+    ),
+}
+
+
+def _filter_product_services(
+    source_uri: str | None, title: str, services: list[Service]
+) -> list[Service]:
+    uri = (source_uri or "").lower().replace("\\", "/")
+    title_l = (title or "").lower()
+    allow: frozenset[str] | None = None
+    for key, names in _PRODUCT_SERVICE_ALLOW.items():
+        if key in uri or key in title_l:
+            allow = names
+            break
+    if allow is None:
+        return services
+    return [s for s in services if s.name.lower() in allow]
+
+
 def build_noc_combined_system(store: ExpedienteStore, workspace: Path | None = None) -> dict[str, Any]:
-    _ = workspace  # reserved for future OpenAPI overlay (opcional)
     run = store.latest_run() or {}
     source_uri = run.get("source_uri")
     title = source_display_name(source_uri)
     product = _product_story(source_uri, title)
     services = [s for s in store.list_services() if not is_noise_service(s.name)]
+    services = _filter_product_services(source_uri, title, services)
     services.sort(key=lambda s: (_criticality(s.name) != "alta", s.name.lower()))
-    self_map = _is_self_map(source_uri, title, services)
+    self_map = _is_self_map(source_uri, title, services, workspace=workspace)
 
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []

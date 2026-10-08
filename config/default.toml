@@ -78,6 +78,9 @@ fallback_root_service = true
 noise_service_names = [
   "src", "docs", "tests", "scripts", "helm-chart",
   "nginx", "performance_locust", "martianbank",
+  # Nombre de producto Noc152: no es microservicio de la app ingerida.
+  # El mapa propio (.demo_noc152) usa capas lógicas, no este “servicio”.
+  "noc152",
 ]
 
 [store]
