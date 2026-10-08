@@ -374,10 +374,10 @@
         </div>
         <div class="panel-b">
           <div class="docs-strip" id="docsStrip">
-            <a class="docs-link" id="docsLink" href="/docs?spec=noc152" target="_blank" rel="noopener">
-              Docs API · Scalar
+            <a class="docs-link" id="docsLink" href="/docs" target="_blank" rel="noopener">
+              Docs NOC
             </a>
-            <span class="docs-hint">contrato HTTP en lectura (sin probar endpoints). El grafo 3D es la vista principal.</span>
+            <span class="docs-hint">Ficha operativa del mapa (operador). Contrato OpenAPI queda en /docs/api.</span>
           </div>
           <div class="thread" id="thread"></div>
           <div class="ask-row">
@@ -1673,10 +1673,11 @@
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "primary";
-        btn.textContent = "Abrir Docs API (Scalar)";
+        const isApi = opts.docsSpec !== "noc";
+        btn.textContent = isApi ? "Abrir contrato API" : "Abrir Docs NOC";
         btn.addEventListener("click", (ev) => {
           ev.stopPropagation();
-          openDocsFromAsk(opts.docsSpec);
+          openDocsFromAsk(isApi ? opts.docsSpec : "noc");
         });
         row.appendChild(btn);
         div.appendChild(row);
@@ -1712,14 +1713,13 @@
               : "mapa + expediente";
         el("askMode").textContent = mode;
         const openApiAsk = /openapi|swagger|endpoint|\/api\//i.test(q);
+        const nocDocAsk = /ficha|documentaci[oó]n|runbook|noc\b|qu[eé] hace|cat[aá]logo/i.test(q);
         let docsSpec = null;
         if (openApiAsk || state.engine === "openapi") {
-          if (state.engine === "openapi") {
-            const product = (metaCache?.openapi_specs || []).find((s) => s.id !== "noc152");
-            docsSpec = product?.id || "martian-bank";
-          } else {
-            docsSpec = "noc152";
-          }
+          const product = (metaCache?.openapi_specs || []).find((s) => s.id !== "noc152");
+          docsSpec = product?.id || "noc152";
+        } else if (nocDocAsk || data.mode === "source") {
+          docsSpec = "noc";
         }
         addBubble("Noc152", data.answer || "Sin respuesta", {
           export: data.mode === "source" ? data.export : null,
@@ -1844,24 +1844,32 @@
     function syncDocsLink(meta, engine) {
       const link = el("docsLink");
       if (!link) return;
-      const specs = Array.isArray(meta?.openapi_specs) ? meta.openapi_specs : [];
-      let specId = "noc152";
+      // Primario: ficha NOC. Solo si el motor es OpenAPI, apuntar al contrato.
       if (engine === "openapi") {
-        const product = specs.find((s) => s.id !== "noc152");
-        if (product) specId = product.id;
+        const specs = Array.isArray(meta?.openapi_specs) ? meta.openapi_specs : [];
+        const product = specs.find((s) => s.id !== "noc152") || specs[0];
+        link.href = product?.docs_url?.replace("/docs?", "/docs/api?")
+          || meta?.docs_api_url
+          || "/docs/api";
+        link.textContent = `Contrato · ${product?.title || "OpenAPI"}`;
+        link.title = "Contrato OpenAPI (técnico; puede venir incompleto)";
+        return;
       }
-      const hit = specs.find((s) => s.id === specId);
-      link.href = hit?.docs_url || meta?.docs_url || `/docs?spec=${encodeURIComponent(specId)}`;
-      link.textContent =
-        engine === "openapi"
-          ? `Docs API · ${hit?.title || specId}`
-          : "Docs API · Scalar";
-      link.title = "Abrir referencia OpenAPI (Scalar, solo lectura) en otra pestaña";
+      link.href = meta?.docs_url || "/docs";
+      link.textContent = "Docs NOC";
+      link.title = "Ficha operativa generada desde Combinado";
     }
 
-    function openDocsFromAsk(specId) {
-      const url = `/docs?spec=${encodeURIComponent(specId || "noc152")}`;
-      window.open(url, "_blank", "noopener");
+    function openDocsFromAsk(kind) {
+      if (!kind || kind === "noc") {
+        window.open("/docs", "_blank", "noopener");
+        return;
+      }
+      window.open(
+        `/docs/api?spec=${encodeURIComponent(kind)}`,
+        "_blank",
+        "noopener"
+      );
     }
 
     let metaCache = null;

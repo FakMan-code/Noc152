@@ -37,7 +37,7 @@ Prioridades org:
 ## Qué priorizar en Noc152
 
 1. **Grafo 3D Combinado** — historia y deps (cara NOC).
-2. **Expediente + audit + código exportable** — evidencia para el agente.
-3. **Scalar `/docs`** — contrato HTTP en lectura (cerebro / agentes).
-4. **No** construir un laboratorio de endpoints dentro del briefing.
+2. **`/docs` ficha NOC** — documentación por audiencia operador, generada desde Combinado (no Swagger vacío).
+3. **Expediente + audit + código exportable** — evidencia para el agente.
+4. **`/docs/api` Scalar** — contrato HTTP técnico, secundario (suele venir flaco si el OpenAPI no tiene descripciones).
 5. Después: semáforo ops real, MCP a Confluence/Jira/Datadog, alineado a IA-NOC.

@@ -76,7 +76,7 @@ def list_openapi_specs(workspace: Path | None = None) -> list[dict[str, Any]]:
                 "title": title,
                 "path": str(path),
                 "url": f"/api/openapi/{sid}",
-                "docs_url": f"/docs?spec={sid}",
+                "docs_url": f"/docs/api?spec={sid}",
             }
     # Prefer brain first in UI lists
     order = {"noc152": 0, "martian-bank": 1, "microservices-demo": 2}

@@ -88,7 +88,9 @@ Aristas: cyan + 1 punta = un sentido; lavanda + 2 puntas = ida/vuelta. Semáforo
 - `GET /api/graph/<servicio>` — expediente 3D de un servicio  
 - `POST /api/ask` — `{ "question": "...", "service": "<nombre>" }`  
 - `GET /api/evidence/<id>`  
-- `GET /docs` — Scalar (referencia OpenAPI en lectura; el mapa 3D sigue siendo la vista principal)  
+- `GET /docs` — ficha NOC (operador; generada desde Combinado)  
+- `GET /docs/api` — contrato OpenAPI/Scalar (técnico, secundario)  
+- `GET /api/docs/noc` · `/api/docs/noc.md` — handbook JSON/Markdown  
 - `GET /api/openapi` — lista de specs · `GET /api/openapi/<id>` — JSON  
 
 

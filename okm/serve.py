@@ -24,6 +24,7 @@ from okm.openapi_graph import (
 )
 from okm.humanize import is_noise_service, product_name
 from okm.node_sources import build_source_zip, read_single_source
+from okm.noc_docs import build_noc_handbook, render_noc_handbook_markdown
 from okm.store import ExpedienteStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -74,7 +75,8 @@ class BriefingApp:
                 ),
                 "openapi_spec": _rel_or_abs(find_openapi_spec(self.workspace), self.workspace),
                 "openapi_specs": list_openapi_specs(self.workspace),
-                "docs_url": "/docs?spec=noc152",
+                "docs_url": "/docs",
+                "docs_api_url": "/docs/api",
                 "engines": available_engines(self.workspace),
             }
         finally:
@@ -166,9 +168,41 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                 self._send(200, html, "text/html; charset=utf-8")
                 return
 
-            if path in {"/docs", "/docs/", "/swagger", "/swagger/"}:
+            # Docs NOC (audiencia operador) — primaria
+            if path in {"/docs", "/docs/", "/docs/noc", "/docs/noc/"}:
+                html = (STATIC_DIR / "noc-docs.html").read_bytes()
+                self._send(200, html, "text/html; charset=utf-8")
+                return
+
+            # Contrato OpenAPI / Scalar — secundario (técnico; a menudo incompleto)
+            if path in {"/docs/api", "/docs/api/", "/swagger", "/swagger/", "/scalar", "/scalar/"}:
                 html = (STATIC_DIR / "docs.html").read_bytes()
                 self._send(200, html, "text/html; charset=utf-8")
+                return
+
+            if path in {"/api/docs/noc", "/api/docs/noc.json"}:
+                store = app.open_store()
+                try:
+                    payload = build_noc_handbook(store, workspace=app.workspace)
+                finally:
+                    store.close()
+                status, body, ctype = _json_bytes(payload)
+                self._send(status, body, ctype)
+                return
+
+            if path == "/api/docs/noc.md":
+                store = app.open_store()
+                try:
+                    hand = build_noc_handbook(store, workspace=app.workspace)
+                    md = render_noc_handbook_markdown(hand).encode("utf-8")
+                finally:
+                    store.close()
+                self._send(
+                    200,
+                    md,
+                    "text/markdown; charset=utf-8",
+                    download_name="noc-handbook.md",
+                )
                 return
 
             if path == "/api/openapi":

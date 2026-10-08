@@ -30,12 +30,12 @@ Cuando el código **no esté** en el workspace local (otro repo, otra máquina, 
 
 MCP no reemplaza el expediente: es un **brazo** para ir a buscar; el log queda igual.
 
-## Docs API (Scalar)
+## Docs NOC (primario) vs contrato API
 
-Desde el panel **Asistente** → **Docs API · Scalar**, o abrí `/docs?spec=noc152`.
-Referencia OpenAPI moderna (reemplazo de Swagger UI): lectura de paths/schemas,
-sin “Try it out” — el NOC consulta el mapa; no es un cliente de pruebas.
-El grafo 3D sigue siendo la cara principal.
+- **`/docs`** — ficha operativa generada desde Combinado (audiencia operador NOC).
+- **`/docs/api`** — Scalar/OpenAPI (técnico; suele verse vacío si el JSON no trae descripciones).
+
+Desde el Asistente: **Docs NOC**. El grafo 3D sigue siendo la cara principal.
 
 ## Probar
 
