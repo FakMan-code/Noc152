@@ -119,6 +119,16 @@
     .read-grid .card p { font-size: 0.84rem; color: var(--muted); }
     .break .card header h4 { font-size: 0.92rem; }
     .empty { color: var(--muted); font-size: 0.9rem; }
+    .files {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem;
+    }
+    a.file {
+      font-family: var(--mono); font-size: 0.68rem; color: #ddd6fe;
+      text-decoration: none; border: 1px solid rgba(139,92,246,0.35);
+      background: var(--violet-dim); border-radius: 999px; padding: 0.18rem 0.5rem;
+    }
+    a.file:hover { border-color: var(--accent); color: #ffd0bf; background: var(--accent-dim); }
+    .files.overview a.file { border-radius: 8px; padding: 0.28rem 0.55rem; }
     footer {
       margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--line);
       font-family: var(--mono); font-size: 0.68rem; color: var(--muted); line-height: 1.45;
@@ -131,15 +141,25 @@
     <span class="tag accent">docs NOC</span>
     <span class="tag" id="audTag">operador</span>
     <span class="grow"></span>
-    <a class="btn ghost" href="/docs/api" title="Contrato OpenAPI (técnico, a menudo incompleto)">Contrato API</a>
+    <a class="btn ghost" id="apiLink" href="/docs/api" title="Contrato OpenAPI (técnico, a menudo incompleto)">Contrato API</a>
     <a class="btn" id="mdLink" href="/api/docs/noc.md" target="_blank" rel="noopener">Markdown</a>
-    <a class="btn primary" href="/">← Mapa 3D</a>
+    <a class="btn primary" id="mapLink" href="/">← Mapa 3D</a>
   </header>
   <main id="main">
     <p class="empty">Cargando ficha NOC…</p>
   </main>
 
   <script>
+    const params = new URLSearchParams(location.search);
+    const rootId = params.get("root") || "";
+
+    function withRoot(path) {
+      if (!rootId) return path;
+      const sep = path.includes("?") ? "&" : "?";
+      if (/[?&]root=/.test(path)) return path;
+      return `${path}${sep}root=${encodeURIComponent(rootId)}`;
+    }
+
     const esc = (s) => String(s ?? "")
       .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -148,6 +168,22 @@
       const c = String(crit || "media");
       return `<span class="pill ${esc(c)}">${esc(c)}</span>`;
     }
+
+    function fileLinks(files, cls) {
+      const list = Array.isArray(files) ? files : [];
+      if (!list.length) return "";
+      return `<div class="files ${cls || ""}">${list.map((f) => {
+        const href = withRoot(f.url || `#`);
+        const label = f.ref || f.path || "";
+        const tip = f.piece ? `${label} · ${f.piece}` : label;
+        return `<a class="file" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(tip)}">${esc(label)}</a>`;
+      }).join("")}</div>`;
+    }
+
+    // Wire chrome links to the same root (avoid Martian bleed-through)
+    document.getElementById("apiLink").href = withRoot("/docs/api");
+    document.getElementById("mdLink").href = withRoot("/api/docs/noc.md");
+    document.getElementById("mapLink").href = rootId ? `/?root=${encodeURIComponent(rootId)}` : "/";
 
     function render(hand) {
       document.title = `Noc152 · ${hand.title || "Docs NOC"}`;
@@ -173,6 +209,7 @@
             <div>${deps}</div>
             ${used ? `<div>${used}</div>` : ""}
           </div>
+          ${fileLinks(p.key_files)}
         </article>`;
       }).join("");
 
@@ -184,17 +221,28 @@
           </header>
           <p>${esc(b.impact)}</p>
           <div class="meta">Mirar: ${esc((b.check || []).join(" · "))}</div>
+          ${fileLinks(b.key_files)}
         </article>
       `).join("");
 
       const ht = hand.how_to_read || {};
+      const keySec = (hand.key_files || []).length
+        ? `<section>
+            <h3>Archivos clave <span>${hand.key_files.length}</span></h3>
+            <p class="empty" style="margin:0 0 0.55rem">Código más citado en el expediente de esta raíz (abrí para ver el archivo).</p>
+            ${fileLinks(hand.key_files, "overview")}
+          </section>`
+        : "";
+
       document.getElementById("main").innerHTML = `
         <div class="hero">
-          <p class="eyebrow">Ficha operativa · generada desde Combinado</p>
+          <p class="eyebrow">Ficha operativa · generada desde Combinado${hand.root ? ` · ${esc(hand.root)}` : ""}</p>
           <h2>${esc(hand.title)}</h2>
           <p>${esc(hand.summary)}</p>
           ${hand.flow ? `<div class="flow">${esc(hand.flow)}</div>` : ""}
         </div>
+
+        ${keySec}
 
         <section>
           <h3>Cómo leer el mapa <span>operación</span></h3>
@@ -218,14 +266,14 @@
         <footer>
           Audiencia: ${esc(hand.audience_label)}. Esto no es Swagger: es la ficha que un NOC usa para entender el sistema.<br/>
           Contrato HTTP (OpenAPI/Scalar) es opcional y a menudo viene vacío si el repo no lo documentó —
-          <a href="/docs/api" style="color:var(--accent)">abrir contrato técnico</a>.
+          <a href="${esc(withRoot(hand.links?.api_contract || "/docs/api"))}" style="color:var(--accent)">abrir contrato técnico</a>.
         </footer>
       `;
     }
 
     (async () => {
       try {
-        const res = await fetch("/api/docs/noc");
+        const res = await fetch(withRoot("/api/docs/noc"));
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || res.statusText);
         render(data);

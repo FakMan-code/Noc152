@@ -359,8 +359,10 @@ def agent_answer(
     focus_node: str | None = None,
     use_llm: bool = True,
     model: str = DEFAULT_MODEL,
+    depth: str = "quick",
 ) -> dict[str, Any]:
     q = (question or "").strip()
+    ask_depth = "deep" if str(depth or "").lower() == "deep" else "quick"
     if not q:
         return {
             "ok": False,
@@ -382,17 +384,27 @@ def agent_answer(
             "mode": "empty",
         }
 
-    source_files = read_node_sources(store, focus_node=focus_node, question=q)
+    source_files = read_node_sources(
+        store, focus_node=focus_node, question=q, depth=ask_depth
+    )
     source_paths = [f["path"] for f in source_files]
 
     # Pedido de código → resumen corto + export (UI copia/descarga archivo completo).
     if wants_source_code(q) and (focus_node or source_files):
         full_files = read_node_sources(
-            store, focus_node=focus_node, question=q, for_dossier=False
+            store,
+            focus_node=focus_node,
+            question=q,
+            for_dossier=False,
+            depth=ask_depth,
         )
         if not full_files and focus_node:
             full_files = read_node_sources(
-                store, focus_node=focus_node, question=focus_node, for_dossier=False
+                store,
+                focus_node=focus_node,
+                question=focus_node,
+                for_dossier=False,
+                depth=ask_depth,
             )
         source_paths = [f["path"] for f in full_files]
         answer = short_code_answer(full_files, focus_node)

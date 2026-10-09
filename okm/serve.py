@@ -24,7 +24,9 @@ from okm.openapi_graph import (
 )
 from okm.humanize import is_noise_service, product_name
 from okm.node_sources import build_source_zip, read_single_source
+from okm.noc_combined import is_self_map_workspace, self_map_part_count
 from okm.noc_docs import build_noc_handbook, render_noc_handbook_markdown
+from okm.roots import discover_roots, resolve_root_id, workspace_for_root
 from okm.store import ExpedienteStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -35,28 +37,71 @@ class BriefingApp:
         self.workspace = workspace.expanduser().resolve()
         self.host = host
         self.port = port
+        self.roots = discover_roots(self.workspace)
+        self.default_root = resolve_root_id(self.roots, None, self.workspace)
 
-    def open_store(self) -> ExpedienteStore:
-        return ExpedienteStore(self.workspace)
+    def open_store(self, workspace: Path | None = None) -> ExpedienteStore:
+        return ExpedienteStore(workspace or self.workspace)
 
-    def meta(self) -> dict[str, Any]:
-        store = self.open_store()
+    def workspace_for(self, root_id: str | None) -> tuple[str, Path]:
+        rid = resolve_root_id(self.roots, root_id, self.workspace)
+        ws = workspace_for_root(self.roots, rid, self.workspace)
+        return rid, ws
+
+    def public_roots(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": r["id"],
+                "label": r["label"],
+                "source_uri": r.get("source_uri"),
+                "services": r.get("services", 0),
+            }
+            for r in self.roots
+        ]
+
+    def meta(self, workspace: Path | None = None, root_id: str | None = None) -> dict[str, Any]:
+        rid, ws = self.workspace_for(root_id)
+        if workspace is not None:
+            ws = workspace
+        store = self.open_store(ws)
         try:
             run = store.latest_run() or {}
             services = store.list_services()
             ui = load_config().get("ui", {}) or {}
             scopes = ui.get("scopes") or [{"id": "pais", "label": "País", "options": []}]
+            visible = [s for s in services if not is_noise_service(s.name)]
+            root_label = next(
+                (r["label"] for r in self.roots if r["id"] == rid),
+                product_name(),
+            )
+            self_map = is_self_map_workspace(
+                run.get("source_uri"), root_label, visible, workspace=ws
+            )
+            if self_map:
+                parts_count = self_map_part_count()
+                parts_unit = "capa" if parts_count == 1 else "capas"
+                map_overview_label = f"Mapa completo · {parts_count} {parts_unit}"
+            else:
+                parts_count = len(visible)
+                parts_unit = "servicio" if parts_count == 1 else "servicios"
+                map_overview_label = f"Mapa completo · {parts_count} {parts_unit}"
             return {
-                "product_name": product_name(),
+                "product_name": root_label,
                 "version": __version__,
-                "default_engine": GraphEngine.COMBINED.value,
-                "workspace": str(self.workspace),
+                "default_engine": "general",
+                "workspace": str(ws),
+                "root": rid,
+                "roots": self.public_roots(),
                 "source_uri": run.get("source_uri"),
                 "run_id": run.get("run_id"),
                 "files_ingested": run.get("files_ingested"),
                 "claims_written": run.get("claims_written"),
                 "gaps_written": run.get("gaps_written"),
                 "scopes": scopes,
+                "self_map": self_map,
+                "parts_count": parts_count,
+                "parts_unit": parts_unit,
+                "map_overview_label": map_overview_label,
                 "services": [
                     {
                         "id": s.service_id,
@@ -64,20 +109,19 @@ class BriefingApp:
                         "summary": s.summary,
                         "root_path": s.root_path,
                     }
-                    for s in services
-                    if not is_noise_service(s.name)
+                    for s in visible
                 ],
-                "has_system_view": sum(1 for s in services if not is_noise_service(s.name)) >= 1,
+                "has_system_view": self_map or len(visible) >= 1,
                 "archify_spec": (
-                    str(find_archify_spec(self.workspace).relative_to(self.workspace))
-                    if find_archify_spec(self.workspace)
-                    else None
+                    str(find_archify_spec(ws).relative_to(ws))
+                    if find_archify_spec(ws) and str(find_archify_spec(ws)).startswith(str(ws))
+                    else (str(find_archify_spec(ws)) if find_archify_spec(ws) else None)
                 ),
-                "openapi_spec": _rel_or_abs(find_openapi_spec(self.workspace), self.workspace),
-                "openapi_specs": list_openapi_specs(self.workspace),
-                "docs_url": "/docs",
+                "openapi_spec": _rel_or_abs(find_openapi_spec(ws), ws),
+                "openapi_specs": list_openapi_specs(ws),
+                "docs_url": f"/docs?root={rid}",
                 "docs_api_url": "/docs/api",
-                "engines": available_engines(self.workspace),
+                "engines": available_engines(ws),
             }
         finally:
             store.close()
@@ -162,6 +206,8 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
             parsed = urlparse(self.path)
             path = unquote(parsed.path)
             qs = parse_qs(parsed.query)
+            root_q = (qs.get("root") or [None])[0]
+            rid, ws = app.workspace_for(root_q)
 
             if path in {"/", "/index.html"}:
                 html = (STATIC_DIR / "index.html").read_bytes()
@@ -180,10 +226,17 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                 self._send(200, html, "text/html; charset=utf-8")
                 return
 
+            if path == "/api/roots":
+                status, body, ctype = _json_bytes(
+                    {"roots": app.public_roots(), "active": rid}
+                )
+                self._send(status, body, ctype)
+                return
+
             if path in {"/api/docs/noc", "/api/docs/noc.json"}:
-                store = app.open_store()
+                store = app.open_store(ws)
                 try:
-                    payload = build_noc_handbook(store, workspace=app.workspace)
+                    payload = build_noc_handbook(store, workspace=ws, root_id=rid)
                 finally:
                     store.close()
                 status, body, ctype = _json_bytes(payload)
@@ -191,9 +244,9 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                 return
 
             if path == "/api/docs/noc.md":
-                store = app.open_store()
+                store = app.open_store(ws)
                 try:
-                    hand = build_noc_handbook(store, workspace=app.workspace)
+                    hand = build_noc_handbook(store, workspace=ws, root_id=rid)
                     md = render_noc_handbook_markdown(hand).encode("utf-8")
                 finally:
                     store.close()
@@ -206,12 +259,26 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                 return
 
             if path == "/api/openapi":
-                specs = list_openapi_specs(app.workspace)
-                # Don't leak absolute paths to the browser
-                public = [
-                    {k: v for k, v in s.items() if k != "path"} for s in specs
-                ]
-                status, body, ctype = _json_bytes({"specs": public})
+                specs = list_openapi_specs(ws)
+                public = []
+                for s in specs:
+                    item = {
+                        k: v
+                        for k, v in s.items()
+                        if k not in {"path", "local"}
+                    }
+                    item["docs_url"] = (
+                        f"/docs/api?spec={item['id']}&root={rid}"
+                        if rid
+                        else item.get("docs_url")
+                    )
+                    item["url"] = (
+                        f"/api/openapi/{item['id']}?root={rid}"
+                        if rid
+                        else item.get("url")
+                    )
+                    public.append(item)
+                status, body, ctype = _json_bytes({"specs": public, "root": rid})
                 self._send(status, body, ctype)
                 return
 
@@ -221,7 +288,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     status, body, ctype = _json_bytes({"ok": False, "error": "missing spec"}, 400)
                     self._send(status, body, ctype)
                     return
-                spec_path = resolve_openapi_spec(sid, app.workspace)
+                spec_path = resolve_openapi_spec(sid, ws)
                 if spec_path is None:
                     status, body, ctype = _json_bytes({"ok": False, "error": "not found"}, 404)
                     self._send(status, body, ctype)
@@ -247,12 +314,12 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                 return
 
             if path == "/api/meta":
-                status, body, ctype = _json_bytes(app.meta())
+                status, body, ctype = _json_bytes(app.meta(root_id=rid))
                 self._send(status, body, ctype)
                 return
 
             if path == "/api/services":
-                store = app.open_store()
+                store = app.open_store(ws)
                 try:
                     payload = [
                         {
@@ -263,10 +330,11 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                             "aliases": s.aliases,
                         }
                         for s in store.list_services()
+                        if not is_noise_service(s.name)
                     ]
                 finally:
                     store.close()
-                status, body, ctype = _json_bytes({"services": payload})
+                status, body, ctype = _json_bytes({"services": payload, "root": rid})
                 self._send(status, body, ctype)
                 return
 
@@ -277,7 +345,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     self._send(status, body, ctype)
                     return
                 mode = (qs.get("view") or ["brief"])[0]
-                store = app.open_store()
+                store = app.open_store(ws)
                 try:
                     svc = store.get_service(name)
                     if not svc:
@@ -293,7 +361,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
 
             if path.startswith("/api/evidence/"):
                 eid = path[len("/api/evidence/") :].strip("/")
-                store = app.open_store()
+                store = app.open_store(ws)
                 try:
                     ev = store.get_evidence(eid)
                     if not ev:
@@ -322,7 +390,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     status, body, ctype = _json_bytes({"ok": False, "error": "missing path"}, 400)
                     self._send(status, body, ctype)
                     return
-                store = app.open_store()
+                store = app.open_store(ws)
                 try:
                     file_hit = read_single_source(
                         store, focus_node=str(focus) if focus else None, rel_path=str(rel)
@@ -345,7 +413,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
 
             if path == "/api/source/bundle":
                 focus = (qs.get("focus") or [None])[0]
-                store = app.open_store()
+                store = app.open_store(ws)
                 try:
                     packed = build_source_zip(
                         store, focus_node=str(focus) if focus else None
@@ -366,27 +434,32 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     status, body, ctype = _json_bytes({"ok": False, "error": "missing service"}, 400)
                     self._send(status, body, ctype)
                     return
-                engine = parse_engine((qs.get("engine") or [GraphEngine.COMBINED.value])[0])
-                store = app.open_store()
+                engine = parse_engine((qs.get("engine") or ["general"])[0])
+                # These projections always cover the whole repo (no re-ingest).
+                whole_repo = engine in {
+                    GraphEngine.TECHNOLOGIES,
+                    GraphEngine.NETWORK,
+                    GraphEngine.OPENAPI,
+                    GraphEngine.FLOWS,
+                    GraphEngine.SERVICES,
+                } or (
+                    engine == GraphEngine.ARCHIFY and find_archify_spec(ws) is not None
+                )
+                store = app.open_store(ws)
                 try:
-                    # Archify IR / OpenAPI: service-agnostic full graph.
-                    if engine == GraphEngine.OPENAPI or (
-                        find_archify_spec(app.workspace) and engine == GraphEngine.ARCHIFY
-                    ):
+                    if whole_repo or name in {
+                        "__system__",
+                        "system",
+                        "_system",
+                        "__archify__",
+                        "__openapi__",
+                    }:
                         payload = build_graph(
                             store,
                             service=None,
                             engine=engine,
                             system=True,
-                            workspace=app.workspace,
-                        )
-                    elif name in {"__system__", "system", "_system", "__archify__", "__openapi__"}:
-                        payload = build_graph(
-                            store,
-                            service=None,
-                            engine=engine,
-                            system=True,
-                            workspace=app.workspace,
+                            workspace=ws,
                         )
                     else:
                         svc = store.get_service(name)
@@ -399,7 +472,7 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                             service=svc,
                             engine=engine,
                             system=False,
-                            workspace=app.workspace,
+                            workspace=ws,
                         )
                 finally:
                     store.close()
@@ -420,7 +493,10 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
             service = data.get("service")
             focus_node = data.get("focus_node") or data.get("node") or data.get("selected")
             use_llm = data.get("use_llm", True)
-            store = app.open_store()
+            depth = str(data.get("depth") or "quick")
+            root_id = data.get("root")
+            _, ws = app.workspace_for(str(root_id) if root_id else None)
+            store = app.open_store(ws)
             try:
                 payload = agent_answer(
                     store,
@@ -428,9 +504,13 @@ def make_handler(app: BriefingApp) -> type[BaseHTTPRequestHandler]:
                     service_name=str(service) if service else None,
                     focus_node=str(focus_node) if focus_node else None,
                     use_llm=bool(use_llm),
+                    depth=depth,
                 )
             finally:
                 store.close()
+            if isinstance(payload, dict):
+                payload.setdefault("depth", "deep" if depth.lower() == "deep" else "quick")
+                payload.setdefault("root", str(root_id) if root_id else None)
             status, body, ctype = _json_bytes(payload)
             self._send(status, body, ctype)
 
@@ -445,7 +525,11 @@ def run_server(workspace: Path, host: str = "127.0.0.1", port: int = 8765) -> No
     httpd = ThreadingHTTPServer((host, port), handler)
     url = f"http://{host}:{port}/"
     print("Noc152", flush=True)
-    print(f"  workspace: {app.workspace}", flush=True)
+    print(f"  default:   {app.workspace}", flush=True)
+    if app.roots:
+        print(f"  roots:     {len(app.roots)} proyectos independientes", flush=True)
+        for r in app.public_roots():
+            print(f"    - {r['id']}: {r['label']} ({r['services']} svc)", flush=True)
     print(f"  open:      {url}", flush=True)
     print("  Ctrl+C to stop", flush=True)
     try:

@@ -1,8 +1,24 @@
-# Motores del mapa 3D (Noc152 v0.2)
+# Proyecciones del mapa 3D (Noc152)
 
-El selector del topbar cambia **qué grafo** se proyecta. Misma UI; distinta fuente de verdad.
+Un repositorio (raíz) se analiza **una vez**. El selector del topbar cambia la **proyección** — no vuelve a hacer ingest.
 
-## Combinado NOC (default desde v0.2)
+Catálogo en código: `okm/projections.py` (`PROJECTIONS`). Backend: `okm/engines.py`.
+
+| Id | Pregunta | Fuente |
+|---|---|---|
+| `general` | ¿Qué es la app? | Combinado NOC |
+| `services` | ¿Qué servicios y deps? | Combinado (enfoque impacto) |
+| `architecture` | ¿Capas / boundaries? | Archify IR (parcial sin IR) |
+| `technologies` | ¿Con qué stack? | Claims `depends_on_package` / imports |
+| `network` | ¿Contrato HTTP? | OpenAPI |
+| `flows` | ¿Camino de una acción? | Deps conocidas del producto (derived) |
+| `expediente` | ¿Claims / gaps? | Grafo Noc152 denso |
+
+URL: `/?root=demo_martian&graph=technologies`
+
+---
+
+## Combinado NOC (`general`, default)
 
 **Para qué:** entender la app en 30 segundos — roles humanos + quién depende de quién.
 

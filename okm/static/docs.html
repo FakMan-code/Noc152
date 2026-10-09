@@ -58,25 +58,39 @@
   </header>
   <p class="note">
     Contrato técnico OpenAPI (Scalar). Secundario: el demo a menudo viene incompleto.
-    Ficha de operador: <a href="/docs" style="color:#f54e00">Docs NOC</a>.
+    Ficha de operador: <a id="nocDocsLink" href="/docs" style="color:#f54e00">Docs NOC</a>.
   </p>
   <div id="app"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   <script>
     const params = new URLSearchParams(location.search);
+    const rootId = params.get("root") || "";
     const select = document.getElementById("specSelect");
     let apiRef = null;
+
+    function withRoot(path) {
+      if (!rootId) return path;
+      const sep = path.includes("?") ? "&" : "?";
+      if (/[?&]root=/.test(path)) return path;
+      return `${path}${sep}root=${encodeURIComponent(rootId)}`;
+    }
+
+    const nocLink = document.getElementById("nocDocsLink");
+    if (nocLink) nocLink.href = withRoot("/docs");
 
     function preferredSpec(list) {
       const q = params.get("spec");
       if (q && list.some((s) => s.id === q)) return q;
+      // Product contract of this root first; brain (noc152) only as fallback
+      const product = list.find((s) => s.id !== "noc152");
+      if (product) return product.id;
       if (list.some((s) => s.id === "noc152")) return "noc152";
       return list[0]?.id || "noc152";
     }
 
     function mount(specId) {
-      const url = `/api/openapi/${encodeURIComponent(specId)}`;
+      const url = withRoot(`/api/openapi/${encodeURIComponent(specId)}`);
       const host = document.getElementById("app");
       host.innerHTML = "";
       apiRef = Scalar.createApiReference("#app", {
@@ -95,11 +109,12 @@
       });
       const next = new URL(location.href);
       next.searchParams.set("spec", specId);
+      if (rootId) next.searchParams.set("root", rootId);
       history.replaceState(null, "", next);
     }
 
     (async () => {
-      const res = await fetch("/api/openapi");
+      const res = await fetch(withRoot("/api/openapi"));
       const data = await res.json();
       const specs = data.specs || [];
       select.innerHTML = specs.map(

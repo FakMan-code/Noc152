@@ -6,6 +6,7 @@ Los endpoints OpenAPI viven en el motor OpenAPI, no acá — evita ruido.
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -141,6 +142,11 @@ _PRODUCT_STORY: dict[str, dict[str, str]] = {
 }
 
 # Capas lógicas del propio Noc152 (mono-repo → historia legible en Combinado).
+def self_map_part_count() -> int:
+    """Logical layers shown on the Noc152 self-map (not microservices)."""
+    return len(_SELF_ROLES)
+
+
 _SELF_ROLES: list[dict[str, Any]] = [
     {
         "id": "role:ingest",
@@ -238,7 +244,7 @@ def _product_story(source_uri: str | None, title: str) -> dict[str, str]:
     }
 
 
-def _is_self_map(
+def is_self_map_workspace(
     source_uri: str | None,
     title: str,
     services: list[Service],
@@ -249,7 +255,6 @@ def _is_self_map(
     No depende de un servicio llamado «Noc152» (ese nombre es ruido en demos).
     """
     uri = (source_uri or "").lower().replace("\\", "/")
-    title_l = (title or "").lower()
     if "proyecto-noc-152" in uri:
         return True
     if workspace is not None:
@@ -260,6 +265,10 @@ def _is_self_map(
     if len(services) == 1 and services[0].name.lower() == "okm":
         return True
     return False
+
+
+# Back-compat for callers that used the private name
+_is_self_map = is_self_map_workspace
 
 
 def _append_self_roles(
@@ -348,6 +357,43 @@ def _append_self_roles(
                     "color": _EDGE_DEP,
                 }
             )
+
+
+def _top_evidence_paths(
+    store: ExpedienteStore, svc: Service, *, limit: int = 3
+) -> list[str]:
+    """Most-cited code-ish paths under a service folder (for dock + handbook)."""
+    prefix = (svc.root_path or svc.name or "").replace("\\", "/").strip("/")
+    counts: Counter[str] = Counter()
+    for ev in store.list_evidence():
+        path = (ev.path or "").replace("\\", "/")
+        if not path or not prefix:
+            continue
+        if not (path == prefix or path.startswith(prefix + "/")):
+            continue
+        lower = path.lower()
+        base = lower.rsplit("/", 1)[-1]
+        if base in {"dockerfile", "makefile"} or lower.endswith(
+            (".md", ".txt", ".license")
+        ):
+            continue
+        counts[path] += 1
+
+    def sort_key(item: tuple[str, int]) -> tuple[int, int, str]:
+        path, n = item
+        lower = path.lower()
+        if any(
+            lower.endswith(s)
+            for s in (".py", ".go", ".ts", ".js", ".java", ".rs", ".cs")
+        ):
+            tier = 0
+        elif lower.endswith((".json", ".yaml", ".yml", ".toml", ".proto")):
+            tier = 1
+        else:
+            tier = 2
+        return (tier, -n, path)
+
+    return [p for p, _ in sorted(counts.items(), key=sort_key)[:limit]]
 
 
 def _dep_pairs(services: list[Service]) -> list[tuple[str, str]]:
@@ -534,6 +580,29 @@ def build_noc_combined_system(store: ExpedienteStore, workspace: Path | None = N
                 "color": _EDGE,
             }
         )
+        key_paths = _top_evidence_paths(store, svc, limit=3)
+        sections: list[dict[str, Any]] = [
+            {
+                "title": "Qué hace",
+                "items": [
+                    {"statement": story["blurb"], "kind": "observed"},
+                    {
+                        "statement": f"En el repo: carpeta «{svc.root_path or svc.name}».",
+                        "kind": "inferred",
+                    },
+                ],
+            }
+        ]
+        if key_paths:
+            sections.append(
+                {
+                    "title": "Archivos clave",
+                    "items": [
+                        {"statement": f"Archivo: {p}", "kind": "observed"}
+                        for p in key_paths
+                    ],
+                }
+            )
         details[nid] = {
             "title": story["role"],
             "kind": "service",
@@ -545,21 +614,12 @@ def build_noc_combined_system(store: ExpedienteStore, workspace: Path | None = N
                 "rol": story["role"],
                 "criticidad": crit,
                 "ruta": svc.root_path,
+                "fuentes": ", ".join(key_paths) if key_paths else "—",
             },
-            "sections": [
-                {
-                    "title": "Qué hace",
-                    "items": [
-                        {"statement": story["blurb"], "kind": "observed"},
-                        {
-                            "statement": f"En el repo: carpeta «{svc.name}».",
-                            "kind": "inferred",
-                        },
-                    ],
-                }
-            ],
+            "sections": sections,
             "facet": "service",
             "open_service": svc.name,
+            "sources": key_paths,
         }
 
     for src_name, dst_name in _dep_pairs(services):

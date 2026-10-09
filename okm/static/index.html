@@ -53,6 +53,7 @@
       border: 1px solid var(--line); border-radius: 8px;
     }
     select { padding: 0.4rem 0.55rem; min-width: 130px; max-width: min(280px, 36vw); }
+    #rootSelect { min-width: 160px; max-width: min(220px, 40vw); border-color: var(--accent); }
     button { padding: 0.4rem 0.7rem; cursor: pointer; transition: border-color 140ms ease, background 140ms ease; }
     button:hover { border-color: #444; }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -338,9 +339,10 @@
         <span class="tag">mapa · expediente</span>
       </div>
       <div class="top-actions">
-        <select id="serviceSelect" aria-label="Qué mirás" title="Mapa completo = todos juntos. Después elegís un servicio."></select>
-        <select id="engineSelect" aria-label="Motor de conocimiento">
-          <option value="archify">Archify</option>
+        <select id="rootSelect" aria-label="Proyecto / repositorio" title="Cada raíz es un repo independiente. No se mezclan en el mismo mapa."></select>
+        <select id="serviceSelect" aria-label="Qué mirás" title="Dentro del proyecto elegido: mapa completo o un servicio."></select>
+        <select id="engineSelect" aria-label="Tipo de grafo" title="Misma raíz, distinta proyección — sin re-analizar.">
+          <option value="general">General</option>
         </select>
         <select id="scopeSelect" aria-label="País" title="Alcance por país (próximamente)">
           <option value="">País</option>
@@ -377,11 +379,14 @@
             <a class="docs-link" id="docsLink" href="/docs" target="_blank" rel="noopener">
               Docs NOC
             </a>
-            <span class="docs-hint">Ficha del producto en el mapa (no mezclar con el proyecto Noc152).</span>
+            <span class="docs-hint">Ficha de la raíz activa (proyecto del selector).</span>
+            <label class="docs-hint" style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer">
+              <input type="checkbox" id="askDeep" /> deep
+            </label>
           </div>
           <div class="thread" id="thread"></div>
           <div class="ask-row">
-            <textarea id="question" placeholder="Ej: ¿qué hace este nodo? ¿cómo llega al Client?"></textarea>
+            <textarea id="question" placeholder="Ej: ¿qué hace este nodo? ¿código de Combinado?"></textarea>
             <button type="button" class="primary" id="askBtn">Preguntar</button>
           </div>
         </div>
@@ -417,7 +422,8 @@
       service: null,
       graph: null,
       selectedId: null,
-      engine: "combined",
+      engine: "general",
+      root: null,
       activeView: null,
       activeFacets: new Set(),
       nodeMeshes: new Map(),
@@ -435,8 +441,30 @@
       .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
+    function withRoot(path) {
+      const root = state.root || el("rootSelect")?.value;
+      if (!root) return path;
+      const sep = path.includes("?") ? "&" : "?";
+      if (/[?&]root=/.test(path)) return path;
+      return `${path}${sep}root=${encodeURIComponent(root)}`;
+    }
+
     async function api(path, opts) {
-      const res = await fetch(path, opts);
+      const method = (opts?.method || "GET").toUpperCase();
+      let url = path;
+      let next = opts ? { ...opts } : undefined;
+      if (method === "GET" || method === "HEAD") {
+        url = withRoot(path);
+      } else if (next?.body && typeof next.body === "string") {
+        try {
+          const body = JSON.parse(next.body);
+          if (body && typeof body === "object" && !body.root && state.root) {
+            body.root = state.root;
+            next = { ...next, body: JSON.stringify(body) };
+          }
+        } catch (_) { /* keep body */ }
+      }
+      const res = await fetch(url, next);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || res.statusText);
       return data;
@@ -1582,7 +1610,7 @@
 
     async function copySourceFile(url, btn) {
       try {
-        const res = await fetch(url);
+        const res = await fetch(withRoot(url));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const text = await res.text();
         await navigator.clipboard.writeText(text);
@@ -1619,7 +1647,7 @@
 
         const dl = document.createElement("a");
         dl.className = "export-btn";
-        dl.href = primary.url;
+        dl.href = withRoot(primary.url);
         dl.download = primary.path.split("/").pop();
         dl.textContent = "Descargar primario";
         dl.addEventListener("click", (ev) => ev.stopPropagation());
@@ -1629,7 +1657,7 @@
       if (exp.bundle_url) {
         const zip = document.createElement("a");
         zip.className = "export-btn primary";
-        zip.href = exp.bundle_url;
+        zip.href = withRoot(exp.bundle_url);
         zip.download = "";
         zip.textContent = "Descargar .zip";
         zip.addEventListener("click", (ev) => ev.stopPropagation());
@@ -1640,7 +1668,7 @@
         if (f === primary || !f.url) continue;
         const a = document.createElement("a");
         a.className = "export-btn";
-        a.href = f.url;
+        a.href = withRoot(f.url);
         a.download = f.path.split("/").pop();
         a.textContent = f.path.split("/").pop();
         a.title = f.path;
@@ -1693,7 +1721,8 @@
       addBubble("vos", q);
       el("question").value = "";
       try {
-        el("askMode").textContent = "leyendo mapa…";
+        const deep = Boolean(el("askDeep")?.checked);
+        el("askMode").textContent = deep ? "deep research…" : "leyendo mapa…";
         const focus = state.selectedId || null;
         const data = await api("/api/ask", {
           method: "POST",
@@ -1703,14 +1732,17 @@
             service: state.service,
             focus_node: focus,
             use_llm: true,
+            depth: deep ? "deep" : "quick",
+            root: state.root,
           }),
         });
+        const depthTag = data.depth === "deep" ? " · deep" : "";
         const mode =
           data.mode === "source"
-            ? "código real · audit"
+            ? `código real · audit${depthTag}`
             : data.mode === "agent"
-              ? `mapa · ${data.model || "ollama"}`
-              : "mapa + expediente";
+              ? `mapa · ${data.model || "ollama"}${depthTag}`
+              : `mapa + expediente${depthTag}`;
         el("askMode").textContent = mode;
         const openApiAsk = /openapi|swagger|endpoint|\/api\//i.test(q);
         const nocDocAsk = /ficha|documentaci[oó]n|runbook|noc\b|qu[eé] hace|cat[aá]logo/i.test(q);
@@ -1781,9 +1813,28 @@
       }
     });
 
+    el("rootSelect").addEventListener("change", (e) => {
+      const next = e.target.value;
+      if (!next || next === state.root) return;
+      state.root = next;
+      const nextUrl = new URL(location.href);
+      nextUrl.searchParams.set("root", next);
+      history.replaceState(null, "", nextUrl);
+      clearNavHistory();
+      applyRoot(next);
+    });
     el("serviceSelect").addEventListener("change", (e) => loadService(e.target.value));
     el("engineSelect").addEventListener("change", () => {
-      syncDocsLink(metaCache, el("engineSelect").value);
+      const eng = el("engineSelect").value;
+      state.engine = eng;
+      const nextUrl = new URL(location.href);
+      nextUrl.searchParams.set("graph", eng);
+      history.replaceState(null, "", nextUrl);
+      const info = (metaCache?.engines || []).find((e) => e.id === eng);
+      if (info?.description) {
+        el("hint").textContent = `${info.label}: ${info.description}`;
+      }
+      syncDocsLink(metaCache, eng);
       if (state.service) loadService(state.service);
     });
     el("askBtn").addEventListener("click", ask);
@@ -1844,78 +1895,133 @@
     function syncDocsLink(meta, engine) {
       const link = el("docsLink");
       if (!link) return;
-      // Primario: ficha NOC. Solo si el motor es OpenAPI, apuntar al contrato.
-      if (engine === "openapi") {
+      // Primario: ficha NOC. Solo si el grafo es Red/OpenAPI, apuntar al contrato.
+      if (engine === "openapi" || engine === "network") {
         const specs = Array.isArray(meta?.openapi_specs) ? meta.openapi_specs : [];
         const product = specs.find((s) => s.id !== "noc152") || specs[0];
-        link.href = product?.docs_url?.replace("/docs?", "/docs/api?")
-          || meta?.docs_api_url
-          || "/docs/api";
+        link.href = withRoot(
+          product?.docs_url?.replace("/docs?", "/docs/api?")
+            || meta?.docs_api_url
+            || "/docs/api"
+        );
         link.textContent = `Contrato · ${product?.title || "OpenAPI"}`;
         link.title = "Contrato OpenAPI (técnico; puede venir incompleto)";
         return;
       }
-      link.href = meta?.docs_url || "/docs";
+      link.href = withRoot(meta?.docs_url || "/docs");
       link.textContent = "Docs NOC";
       link.title = "Ficha operativa generada desde Combinado";
     }
 
     function openDocsFromAsk(kind) {
       if (!kind || kind === "noc") {
-        window.open("/docs", "_blank", "noopener");
+        window.open(withRoot("/docs"), "_blank", "noopener");
         return;
       }
       window.open(
-        `/docs/api?spec=${encodeURIComponent(kind)}`,
+        withRoot(`/docs/api?spec=${encodeURIComponent(kind)}`),
         "_blank",
         "noopener"
       );
+    }
+
+    function renderRoots(roots, activeId) {
+      const sel = el("rootSelect");
+      const list = Array.isArray(roots) ? roots : [];
+      if (!list.length) {
+        sel.innerHTML = `<option value="">Proyecto</option>`;
+        sel.disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      sel.innerHTML = list.map((r) => {
+        const n = r.services != null ? ` · ${r.services} svc` : "";
+        return `<option value="${esc(r.id)}">${esc(r.label)}${esc(n)}</option>`;
+      }).join("");
+      const ids = list.map((r) => r.id);
+      const pick = ids.includes(activeId) ? activeId : ids[0];
+      sel.value = pick;
+      state.root = pick;
+    }
+
+    function fillServiceSelect(meta) {
+      const services = meta.services || [];
+      const overview = [];
+      if (meta.archify_spec) {
+        overview.push(`<option value="__archify__">Diagrama Archify</option>`);
+      }
+      if (meta.has_system_view) {
+        const overviewLabel = meta.map_overview_label
+          || `Mapa completo · ${services.length} servicio${services.length === 1 ? "" : "s"}`;
+        overview.push(
+          `<option value="__system__">${esc(overviewLabel)}</option>`
+        );
+      }
+      const svcOpts = services
+        .map((s) => `<option value="${esc(s.name)}">${esc(s.name)}</option>`)
+        .join("");
+      const parts = [];
+      if (overview.length) {
+        parts.push(`<optgroup label="Vista general">${overview.join("")}</optgroup>`);
+      }
+      if (svcOpts) {
+        parts.push(`<optgroup label="Un servicio">${svcOpts}</optgroup>`);
+      }
+      el("serviceSelect").innerHTML = parts.join("");
+      return services;
+    }
+
+    async function applyRoot(rootId) {
+      state.root = rootId || state.root;
+      el("hint").textContent = "Cargando proyecto…";
+      const meta = await api("/api/meta");
+      metaCache = meta;
+      if (meta.root) state.root = meta.root;
+      if (el("rootSelect") && meta.root) el("rootSelect").value = meta.root;
+      document.title = (meta.product_name || "Noc152") +
+        (meta.version ? ` · v${meta.version}` : "");
+      const brandTag = document.querySelector(".brand .tag");
+      if (brandTag) {
+        brandTag.textContent = meta.product_name
+          ? `${meta.product_name}`
+          : "mapa · expediente";
+      }
+      renderScopes(meta.scopes);
+      if (Array.isArray(meta.engines) && meta.engines.length) {
+        el("engineSelect").innerHTML = meta.engines.map((e) => {
+          const mark = e.status === "stub" ? " · próximamente" : "";
+          return `<option value="${esc(e.id)}" title="${esc(e.description || "")}">${esc(e.label)}${esc(mark)}</option>`;
+        }).join("");
+        const urlGraph = new URLSearchParams(location.search).get("graph");
+        const preferred = urlGraph || meta.default_engine || "general";
+        const ids = meta.engines.map((e) => e.id);
+        const pick = ids.includes(preferred)
+          ? preferred
+          : (ids.includes("general") ? "general" : (ids[0] || "general"));
+        el("engineSelect").value = pick;
+        state.engine = pick;
+      }
+      syncDocsLink(meta, el("engineSelect")?.value || "general");
+      const services = fillServiceSelect(meta);
+      if (meta.archify_spec) await loadService("__archify__");
+      else if (meta.has_system_view) await loadService("__system__");
+      else if (services[0]?.name) await loadService(services[0].name);
+      else {
+        el("detailBody").innerHTML = `<p class="empty">Sin servicios en este proyecto. Corré ingest primero.</p>`;
+        el("hint").textContent = "Proyecto vacío";
+      }
     }
 
     let metaCache = null;
 
     (async function boot() {
       try {
-        const meta = await api("/api/meta");
-        metaCache = meta;
-        document.title = (meta.product_name || "Noc152") +
-          (meta.version ? ` · v${meta.version}` : "");
-        renderScopes(meta.scopes);
-        if (Array.isArray(meta.engines) && meta.engines.length) {
-          el("engineSelect").innerHTML = meta.engines.map(
-            (e) => `<option value="${esc(e.id)}">${esc(e.label)}</option>`
-          ).join("");
-          const preferred = meta.default_engine || "combined";
-          const ids = meta.engines.map((e) => e.id);
-          el("engineSelect").value = ids.includes(preferred) ? preferred : (ids[0] || "combined");
-        }
-        syncDocsLink(meta, el("engineSelect")?.value || "combined");
-        const services = meta.services || [];
-        const nSvc = services.length;
-        const overview = [];
-        if (meta.archify_spec) {
-          overview.push(`<option value="__archify__">Diagrama Archify</option>`);
-        }
-        if (meta.has_system_view) {
-          overview.push(
-            `<option value="__system__">Mapa completo · ${nSvc} servicio${nSvc === 1 ? "" : "s"}</option>`
-          );
-        }
-        const svcOpts = services
-          .map((s) => `<option value="${esc(s.name)}">${esc(s.name)}</option>`)
-          .join("");
-        const parts = [];
-        if (overview.length) {
-          parts.push(`<optgroup label="Vista general">${overview.join("")}</optgroup>`);
-        }
-        if (svcOpts) {
-          parts.push(`<optgroup label="Un servicio">${svcOpts}</optgroup>`);
-        }
-        el("serviceSelect").innerHTML = parts.join("");
-        if (meta.archify_spec) await loadService("__archify__");
-        else if (meta.has_system_view) await loadService("__system__");
-        else if (services[0]?.name) await loadService(services[0].name);
-        else el("detailBody").innerHTML = `<p class="empty">Sin servicios. Corré ingest primero.</p>`;
+        const urlRoot = new URLSearchParams(location.search).get("root");
+        if (urlRoot) state.root = urlRoot;
+        const bootMeta = await api("/api/meta");
+        metaCache = bootMeta;
+        renderRoots(bootMeta.roots || [], state.root || bootMeta.root);
+        await applyRoot(state.root || bootMeta.root);
       } catch (err) {
         el("detailBody").innerHTML = `<p class="empty">No pude cargar Noc152: ${esc(err.message)}</p>`;
       }

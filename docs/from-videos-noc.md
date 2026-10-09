@@ -41,3 +41,32 @@ Prioridades org:
 3. **Expediente + audit + código exportable** — evidencia para el agente.
 4. **`/docs/api` Scalar** — contrato HTTP técnico, secundario (suele venir flaco si el OpenAPI no tiene descripciones).
 5. Después: semáforo ops real, MCP a Confluence/Jira/Datadog, alineado a IA-NOC.
+
+## Video DeepWiki / Devin ([KrJwqsuhZ8U](https://www.youtube.com/watch?v=KrJwqsuhZ8U))
+
+Idea: `github.com/org/repo` → wiki auto (overview, arquitectura, archivos clave, ask sobre el código, “deep research”). Público gratis; privado pago.
+
+| Idea DeepWiki | Encaje Noc152 (no clonar Devin) |
+|---|---|
+| Wiki generada del repo | Ampliar `/docs?root=…` por raíz: ficha + páginas (overview, flujo, piezas, impacto) desde Combinado + expediente |
+| Diagrama de arquitectura | Mapa 3D Combinado (cara) + Archify cuando haya IR |
+| Archivos / conceptos con link a líneas | `node_sources` + evidencia: cada claim/pieza abre path:línea (ya hay export/copiar; falta deep-link en docs) |
+| Ask grounded en archivos | Asistente actual + modo “deep” (más archivos, más lento, audit JSONL) |
+| Indexar repo nuevo | Ya: `ingest` → `.demo_*` / raíz; selector de proyecto |
+| Multi-idioma según la pregunta | Ask ya responde en el idioma del usuario (Ollama) |
+
+**No hacer:** otra DeepWiki genérica ni Try-it-out.  
+**Sí hacer:** wiki operativa por raíz (NOC) + ask con evidencia + deep research opcional.
+
+### Fases sugeridas
+
+1. **Wiki por raíz** — `/docs?root=` Overview · Flujo · **Archivos clave** · Piezas · Si falla (hecho).
+2. **Clic → código** — deep-links `/api/source/file` por raíz (hecho en docs; evidencia del expediente).
+3. **Ask deep** — checkbox `deep` → `POST /api/ask` con `depth=deep` (más archivos en dossier).
+4. **Puente remoto** — MCP/GitHub solo cuando el root no esté en local (fase 2).
+
+### Alineación / anti-mezcla
+
+- Cada raíz tiene su OpenAPI propio (no listar Martian dentro de Boutique/Noc152).
+- Docs y mapa propagan `?root=`.
+- `find_openapi_spec` prioriza specs locales del workspace.

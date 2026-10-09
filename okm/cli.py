@@ -119,7 +119,10 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument(
         "--workspace",
         default=".okm_workspace",
-        help="Directory for sqlite + blobs (default: .okm_workspace)",
+        help=(
+            "Expediente a abrir (default: .okm_workspace). "
+            "En serve, también lista hermanos .demo_* como raíces independientes."
+        ),
     )
     common.add_argument("--config", default=None, help="Optional TOML config path")
 

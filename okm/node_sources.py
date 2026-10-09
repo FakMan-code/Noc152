@@ -92,7 +92,9 @@ def resolve_source_root(store: ExpedienteStore) -> Path | None:
     return None
 
 
-def paths_for_focus(focus_node: str | None, question: str = "") -> list[str]:
+def paths_for_focus(
+    focus_node: str | None, question: str = "", *, max_files: int | None = None
+) -> list[str]:
     keys: list[str] = []
     if focus_node:
         raw = focus_node.strip()
@@ -111,7 +113,8 @@ def paths_for_focus(focus_node: str | None, question: str = "") -> list[str]:
             if rel not in seen:
                 seen.append(rel)
                 out.append(rel)
-    return out[:_MAX_FILES]
+    limit = _MAX_FILES if max_files is None else max(1, max_files)
+    return out[:limit]
 
 
 def wants_source_code(question: str) -> bool:
@@ -133,9 +136,13 @@ def read_node_sources(
     focus_node: str | None,
     question: str = "",
     for_dossier: bool = True,
+    depth: str = "quick",
 ) -> list[dict[str, Any]]:
     """Return source file dicts. for_dossier=True truncates content for LLM."""
-    rels = paths_for_focus(focus_node, question)
+    deep = (depth or "quick").lower() == "deep"
+    max_files = 8 if deep else _MAX_FILES
+    max_chars = 28_000 if deep else _MAX_CHARS_DOSSIER
+    rels = paths_for_focus(focus_node, question, max_files=max_files)
     if not rels:
         return []
     root = resolve_source_root(store)
@@ -150,8 +157,8 @@ def read_node_sources(
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        truncated = for_dossier and len(text) > _MAX_CHARS_DOSSIER
-        content = text[:_MAX_CHARS_DOSSIER] if truncated else text
+        truncated = for_dossier and len(text) > max_chars
+        content = text[:max_chars] if truncated else text
         opened.append(
             {
                 "path": rel.replace("\\", "/"),
@@ -245,6 +252,34 @@ def deterministic_code_answer(
     return short_code_answer(files, focus_node)
 
 
+def _path_allowed_for_focus(
+    store: ExpedienteStore, focus_node: str | None, rel: str
+) -> bool:
+    """Allow mapped node files, evidence paths, or files under a service root."""
+    if rel in set(paths_for_focus(focus_node, "")):
+        return True
+    for ev in store.list_evidence():
+        if (ev.path or "").replace("\\", "/") == rel:
+            return True
+    if not focus_node:
+        return False
+    raw = focus_node.strip()
+    sid = raw[4:] if raw.startswith("svc:") else raw
+    for s in store.list_services():
+        match = (
+            s.service_id == sid
+            or s.name == sid
+            or f"svc:{s.service_id}" == raw
+            or s.name.lower() == sid.lower()
+        )
+        if not match:
+            continue
+        prefix = (s.root_path or s.name or "").replace("\\", "/").strip("/")
+        if prefix and (rel == prefix or rel.startswith(prefix + "/")):
+            return True
+    return False
+
+
 def read_single_source(
     store: ExpedienteStore, *, focus_node: str | None, rel_path: str
 ) -> dict[str, Any] | None:
@@ -252,8 +287,7 @@ def read_single_source(
     if root is None:
         return None
     rel = rel_path.replace("\\", "/").lstrip("/")
-    allowed = set(paths_for_focus(focus_node, ""))
-    if rel not in allowed:
+    if not _path_allowed_for_focus(store, focus_node, rel):
         return None
     path = _safe_file(root, rel)
     if path is None:

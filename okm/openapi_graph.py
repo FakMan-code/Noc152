@@ -48,39 +48,102 @@ def _spec_id(path: Path) -> str:
     return (stem or "openapi").replace(" ", "-").lower()
 
 
-def list_openapi_specs(workspace: Path | None = None) -> list[dict[str, Any]]:
-    """Discover OpenAPI JSON files (workspace first, then bundled docs)."""
+def _scan_openapi_dir(root: Path) -> list[tuple[Path, str]]:
     patterns = ("*.openapi.json", "openapi.json", "swagger.json", "*openapi*.json")
-    by_id: dict[str, dict[str, Any]] = {}
-    for root in _openapi_roots(workspace):
-        if not root.is_dir():
+    found: list[Path] = []
+    if not root.is_dir():
+        return []
+    for pattern in patterns:
+        found.extend(root.glob(pattern))
+    out: list[tuple[Path, str]] = []
+    seen: set[Path] = set()
+    for path in found:
+        if not path.is_file():
             continue
-        found: list[Path] = []
-        for pattern in patterns:
-            found.extend(root.glob(pattern))
-        for path in found:
-            if not path.is_file():
-                continue
-            sid = _spec_id(path)
-            # First win: workspace roots are listed before bundled docs.
-            if sid in by_id:
-                continue
-            title = sid
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                title = str((data.get("info") or {}).get("title") or sid)
-            except (OSError, json.JSONDecodeError, TypeError):
-                pass
-            by_id[sid] = {
-                "id": sid,
-                "title": title,
-                "path": str(path),
-                "url": f"/api/openapi/{sid}",
-                "docs_url": f"/docs/api?spec={sid}",
-            }
-    # Prefer brain first in UI lists
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        out.append((path, _spec_id(path)))
+    return out
+
+
+def _spec_entry(path: Path, sid: str) -> dict[str, Any]:
+    title = sid
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        title = str((data.get("info") or {}).get("title") or sid)
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    return {
+        "id": sid,
+        "title": title,
+        "path": str(path),
+        "url": f"/api/openapi/{sid}",
+        "docs_url": f"/docs/api?spec={sid}",
+        "local": False,
+    }
+
+
+def list_openapi_specs(workspace: Path | None = None) -> list[dict[str, Any]]:
+    """Discover OpenAPI JSON for this workspace — no cross-demo bleed.
+
+    If the workspace (or its openapi/) has specs, those win. Bundled product
+    demos (Martian / Boutique) are only used as fallback when the workspace
+    has none. The Noc152 briefing spec stays available as brain contract.
+    """
+    local_by_id: dict[str, dict[str, Any]] = {}
+    bundled_by_id: dict[str, dict[str, Any]] = {}
+
+    if workspace is not None:
+        ws = workspace.expanduser().resolve()
+        for root in (ws / "openapi", ws):
+            for path, sid in _scan_openapi_dir(root):
+                if sid in local_by_id:
+                    continue
+                entry = _spec_entry(path, sid)
+                entry["local"] = True
+                local_by_id[sid] = entry
+
+    for path, sid in _scan_openapi_dir(_PKG_DOCS):
+        if sid in bundled_by_id:
+            continue
+        bundled_by_id[sid] = _spec_entry(path, sid)
+
+    by_id: dict[str, dict[str, Any]] = dict(local_by_id)
+
+    # Always allow the brain OpenAPI (Noc152 briefing) alongside a product spec.
+    if "noc152" not in by_id and "noc152" in bundled_by_id:
+        by_id["noc152"] = bundled_by_id["noc152"]
+
+    if not local_by_id:
+        # No local product contract: pick bundled by workspace hint, else all.
+        hint = _workspace_spec_hint(workspace)
+        if hint and hint in bundled_by_id:
+            by_id[hint] = bundled_by_id[hint]
+        elif hint == "noc152":
+            pass  # already added
+        else:
+            for sid, entry in bundled_by_id.items():
+                by_id.setdefault(sid, entry)
+
     order = {"noc152": 0, "martian-bank": 1, "microservices-demo": 2}
     return sorted(by_id.values(), key=lambda s: (order.get(s["id"], 9), s["title"].lower()))
+
+
+def _workspace_spec_hint(workspace: Path | None) -> str | None:
+    if workspace is None:
+        return None
+    name = workspace.expanduser().resolve().name.lower().lstrip(".")
+    if "noc152" in name:
+        return "noc152"
+    if "martian" in name:
+        return "martian-bank"
+    if "boutique" in name or "microservices" in name:
+        return "microservices-demo"
+    if "httpx" in name:
+        return None
+    return None
 
 
 def resolve_openapi_spec(spec_id: str, workspace: Path | None = None) -> Path | None:
@@ -90,24 +153,33 @@ def resolve_openapi_spec(spec_id: str, workspace: Path | None = None) -> Path | 
     for item in list_openapi_specs(workspace):
         if item["id"] == want:
             return Path(item["path"])
+    # Last resort: bundled by id (explicit request)
+    for path, sid in _scan_openapi_dir(_PKG_DOCS):
+        if sid == want:
+            return path
     return None
 
 
 def find_openapi_spec(workspace: Path | None = None) -> Path | None:
-    """Prefer workspace/openapi/*, then bundled docs/openapi/*."""
+    """Product contract for this root — never pick another demo's bundled spec."""
     specs = list_openapi_specs(workspace)
     if not specs:
         return None
-    # Prefer product/demo specs for the 3D OpenAPI engine; briefing is for /docs.
-    for sid in ("martian-bank", "microservices-demo"):
+    # Local product specs first (exclude brain-only noc152 if others exist)
+    local_product = [
+        s for s in specs if s.get("local") and s["id"] != "noc152"
+    ]
+    if local_product:
+        return Path(local_product[0]["path"])
+    hint = _workspace_spec_hint(workspace)
+    if hint:
         for item in specs:
-            if item["id"] == sid:
+            if item["id"] == hint:
                 return Path(item["path"])
     for item in specs:
         if item["id"] != "noc152":
             return Path(item["path"])
     return Path(specs[0]["path"])
-
 
 def load_openapi_spec(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
